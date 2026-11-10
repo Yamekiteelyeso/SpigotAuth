@@ -24,7 +24,8 @@ import java.util.Set;
 
 public final class AuthListener implements Listener {
 
-    private static final Set<String> ALLOWED_COMMANDS = Set.of("login", "register");
+    private static final Set<String> ALLOWED_COMMANDS =
+            Set.of("login", "register", "premiumlogin");
     private final SpigotAuth plugin;
 
     public AuthListener(SpigotAuth plugin) {
@@ -41,47 +42,33 @@ public final class AuthListener implements Listener {
         event.setJoinMessage(null);
         plugin.getAuth().startTimeout(player);
 
-        // En online-mode, el propio servidor ya validó la sesión con los
-        // servidores de autenticación de Minecraft. Esa es una prueba real.
+        // Online-mode ya valida la sesión contra los servicios oficiales de Minecraft.
         if (plugin.getServer().getOnlineMode()) {
             plugin.getAuth().markAuthenticated(player);
             player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             player.sendMessage(ChatColor.GREEN + "✔ " + ChatColor.WHITE
-                    + "Tu cuenta fue verificada por Minecraft.");
+                    + "Minecraft verificó tu cuenta correctamente.");
             player.sendMessage(ChatColor.GRAY + "Bienvenido, " + ChatColor.AQUA + player.getName()
                     + ChatColor.GRAY + ". Ya puedes jugar.");
             player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             return;
         }
 
-        // En offline-mode solo se informa del perfil. No se omite el login:
-        // cualquier usuario podría entrar usando el nombre de otra persona.
-        plugin.getPremium().check(player.getName(), result -> {
-            if (!player.isOnline()) return;
-
-            player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            switch (result.status()) {
-                case PREMIUM -> player.sendMessage(ChatColor.GOLD + "★ "
-                        + ChatColor.WHITE + "Encontramos un perfil de Minecraft Java para tu nombre.");
-                case NOT_FOUND -> player.sendMessage(ChatColor.GRAY
-                        + "No encontramos un perfil premium con este nombre.");
-                case UNAVAILABLE -> player.sendMessage(ChatColor.YELLOW
-                        + "No pudimos consultar Mojang ahora mismo. Puedes continuar con tu contraseña.");
-            }
-
-            if (plugin.getAccounts().isRegistered(player.getName())) {
-                player.sendMessage(ChatColor.AQUA + "» " + ChatColor.WHITE
-                        + "Inicia sesión con " + ChatColor.YELLOW + "/login <contraseña>");
-            } else {
-                player.sendMessage(ChatColor.AQUA + "» " + ChatColor.WHITE
-                        + "Crea tu cuenta con " + ChatColor.YELLOW
-                        + "/register <contraseña> <confirmar>");
-            }
-            player.sendMessage(ChatColor.GRAY + "Tienes "
-                    + plugin.getConfig().getLong("login-timeout-seconds", 60)
-                    + " segundos para autenticarte.");
-            player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        });
+        player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        player.sendMessage(ChatColor.GOLD + "★ " + ChatColor.WHITE + "¡Bienvenido a nuestro servidor!");
+        player.sendMessage(ChatColor.GRAY + "Para demostrar que eres el dueño de tu cuenta premium:");
+        player.sendMessage(ChatColor.AQUA + "» " + ChatColor.YELLOW + "/premiumlogin"
+                + ChatColor.GRAY + " — verificar con Microsoft (recomendado).");
+        player.sendMessage(ChatColor.GRAY + "También puedes usar " + ChatColor.YELLOW
+                + "/login <contraseña>" + ChatColor.GRAY + " si ya tienes una cuenta local.");
+        if (!plugin.getConfig().getString("microsoft-client-id", "")
+                .matches("(?i)^(?!PON_AQUI_TU_CLIENT_ID$).+")) {
+            player.sendMessage(ChatColor.RED + "La verificación premium todavía no está configurada por el administrador.");
+        }
+        player.sendMessage(ChatColor.GRAY + "Tienes "
+                + plugin.getConfig().getLong("login-timeout-seconds", 60)
+                + " segundos para autenticarte.");
+        player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     }
 
     @EventHandler
@@ -94,14 +81,11 @@ public final class AuthListener implements Listener {
     public void onMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
         if (!blocked(player)) return;
-
         Location from = event.getFrom();
         Location to = event.getTo();
         if (to == null) return;
-        if (from.getBlockX() == to.getBlockX()
-                && from.getBlockY() == to.getBlockY()
+        if (from.getBlockX() == to.getBlockX() && from.getBlockY() == to.getBlockY()
                 && from.getBlockZ() == to.getBlockZ()) return;
-
         Location fixed = from.clone();
         fixed.setYaw(to.getYaw());
         fixed.setPitch(to.getPitch());
@@ -115,7 +99,7 @@ public final class AuthListener implements Listener {
         Player player = event.getPlayer();
         plugin.getServer().getScheduler().runTask(plugin,
                 () -> player.sendMessage(ChatColor.RED + "✖ " + ChatColor.GRAY
-                        + "Primero debes iniciar sesión para hablar."));
+                        + "Primero debes autenticarte para hablar."));
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
@@ -126,7 +110,6 @@ public final class AuthListener implements Listener {
         int namespace = command.indexOf(':');
         if (namespace >= 0) command = command.substring(namespace + 1);
         command = command.toLowerCase(Locale.ROOT);
-
         if (!ALLOWED_COMMANDS.contains(command)) {
             event.setCancelled(true);
             event.getPlayer().sendMessage(ChatColor.RED + "✖ " + ChatColor.GRAY
@@ -151,9 +134,7 @@ public final class AuthListener implements Listener {
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onInventory(InventoryOpenEvent event) {
-        if (event.getPlayer() instanceof Player player && blocked(player)) {
-            event.setCancelled(true);
-        }
+        if (event.getPlayer() instanceof Player player && blocked(player)) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
@@ -168,8 +149,6 @@ public final class AuthListener implements Listener {
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onDamage(EntityDamageEvent event) {
-        if (event.getEntity() instanceof Player player && blocked(player)) {
-            event.setCancelled(true);
-        }
+        if (event.getEntity() instanceof Player player && blocked(player)) event.setCancelled(true);
     }
 }
