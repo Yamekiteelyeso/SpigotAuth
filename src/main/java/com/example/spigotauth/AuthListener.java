@@ -1,5 +1,6 @@
 package com.example.spigotauth;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -41,8 +42,7 @@ public final class AuthListener implements Listener {
         event.setJoinMessage(null);
         plugin.getAuth().startTimeout(player);
 
-        // En online-mode, el propio servidor ya validó la sesión con los
-        // servidores de autenticación de Minecraft. Esa es una prueba real.
+        // online-mode already means Minecraft validated the account session.
         if (plugin.getServer().getOnlineMode()) {
             plugin.getAuth().markAuthenticated(player);
             player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -54,34 +54,48 @@ public final class AuthListener implements Listener {
             return;
         }
 
-        // En offline-mode solo se informa del perfil. No se omite el login:
-        // cualquier usuario podría entrar usando el nombre de otra persona.
+        if (plugin.getFastLoginBridge().isInstalled()) {
+            player.sendMessage(ChatColor.GOLD + "★ " + ChatColor.WHITE
+                    + "Comprobando tu sesión premium de Minecraft...");
+            // FastLogin completes its protocol/session verification asynchronously.
+            // Only show local credentials if it did not authenticate the player.
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (player.isOnline() && !plugin.getAuth().isAuthenticated(player)) {
+                    sendLocalLoginInstructions(player);
+                }
+            }, 20L);
+            return;
+        }
+
+        // Without a verified protocol provider, profile lookup is informational only.
         plugin.getPremium().check(player.getName(), result -> {
             if (!player.isOnline()) return;
 
             player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             switch (result.status()) {
                 case PREMIUM -> player.sendMessage(ChatColor.GOLD + "★ "
-                        + ChatColor.WHITE + "Encontramos un perfil de Minecraft Java para tu nombre.");
+                        + ChatColor.WHITE + "Encontramos un perfil público con este nombre, pero eso no verifica su propietario.");
                 case NOT_FOUND -> player.sendMessage(ChatColor.GRAY
                         + "No encontramos un perfil premium con este nombre.");
                 case UNAVAILABLE -> player.sendMessage(ChatColor.YELLOW
-                        + "No pudimos consultar Mojang ahora mismo. Puedes continuar con tu contraseña.");
+                        + "No pudimos consultar Mojang ahora mismo.");
             }
-
-            if (plugin.getAccounts().isRegistered(player.getName())) {
-                player.sendMessage(ChatColor.AQUA + "» " + ChatColor.WHITE
-                        + "Inicia sesión con " + ChatColor.YELLOW + "/login <contraseña>");
-            } else {
-                player.sendMessage(ChatColor.AQUA + "» " + ChatColor.WHITE
-                        + "Crea tu cuenta con " + ChatColor.YELLOW
-                        + "/register <contraseña> <confirmar>");
-            }
-            player.sendMessage(ChatColor.GRAY + "Tienes "
-                    + plugin.getConfig().getLong("login-timeout-seconds", 60)
-                    + " segundos para autenticarte.");
-            player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            sendLocalLoginInstructions(player);
         });
+    }
+
+    private void sendLocalLoginInstructions(Player player) {
+        if (plugin.getAccounts().isRegistered(player.getName())) {
+            player.sendMessage(ChatColor.AQUA + "» " + ChatColor.WHITE
+                    + "Inicia sesión con " + ChatColor.YELLOW + "/login <contraseña>");
+        } else {
+            player.sendMessage(ChatColor.AQUA + "» " + ChatColor.WHITE
+                    + "Crea tu cuenta con " + ChatColor.YELLOW
+                    + "/register <contraseña> <confirmar>");
+        }
+        player.sendMessage(ChatColor.GRAY + "Tienes "
+                + plugin.getConfig().getLong("login-timeout-seconds", 60)
+                + " segundos para autenticarte.");
     }
 
     @EventHandler
