@@ -54,6 +54,9 @@ public final class PremiumAccountStore {
         }
 
         String oldName = data.getString(uuidPath(uuid));
+        String oldNameUuid = oldName == null ? null : data.getString(namePath(oldName));
+        String previousNameUuid = data.getString(namePath(name));
+
         if (oldName != null && !oldName.equalsIgnoreCase(name)) {
             data.set(namePath(oldName), null);
         }
@@ -65,7 +68,10 @@ public final class PremiumAccountStore {
             return true;
         } catch (IOException exception) {
             data.set(uuidPath(uuid), oldName);
-            data.set(namePath(name), null);
+            if (oldName != null) {
+                data.set(namePath(oldName), oldNameUuid);
+            }
+            data.set(namePath(name), previousNameUuid);
             logger.severe("No se pudo guardar premium-accounts.yml: " + exception.getMessage());
             return false;
         }
