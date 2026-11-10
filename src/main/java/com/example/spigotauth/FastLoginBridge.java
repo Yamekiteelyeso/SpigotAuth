@@ -77,6 +77,24 @@ public final class FastLoginBridge {
         return installed;
     }
 
+    public String getVerifiedStatus(Player player) {
+        if (!installed || player == null) {
+            return "UNKNOWN";
+        }
+        try {
+            Plugin fastLogin = Bukkit.getPluginManager().getPlugin(FASTLOGIN_PLUGIN);
+            if (fastLogin == null || !fastLogin.isEnabled()) {
+                return "UNKNOWN";
+            }
+            Object status = fastLogin.getClass()
+                    .getMethod("getStatus", UUID.class)
+                    .invoke(fastLogin, player.getUniqueId());
+            return status == null ? "UNKNOWN" : status.toString().toUpperCase(java.util.Locale.ROOT);
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException exception) {
+            return "UNKNOWN";
+        }
+    }
+
     /**
      * If a player had to use their existing local password once, bind that
      * account only when FastLogin independently reports a verified premium
