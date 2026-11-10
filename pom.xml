@@ -5,9 +5,9 @@
 
     <groupId>com.example</groupId>
     <artifactId>SpigotAuth</artifactId>
-    <version>1.1.0</version>
+    <version>1.2.0</version>
     <name>SpigotAuth</name>
-    <description>Secure authentication for Paper and Spigot servers</description>
+    <description>Secure authentication with automatic premium account verification</description>
 
     <properties>
         <maven.compiler.release>17</maven.compiler.release>
@@ -31,6 +31,13 @@
     </dependencies>
 
     <build>
-        <finalName>SpigotAuth-1.1.0</finalName>
+        <finalName>SpigotAuth-1.2.0</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+        </plugins>
     </build>
 </project>
