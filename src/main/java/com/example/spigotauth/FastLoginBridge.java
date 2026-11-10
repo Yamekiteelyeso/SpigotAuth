@@ -52,6 +52,17 @@ public final class FastLoginBridge {
 
             ClassLoader loader = fastLogin.getClass().getClassLoader();
             Class<?> hookType = Class.forName(AUTH_PLUGIN_API, true, loader);
+            Object fastLoginConfig = core.getClass().getMethod("getConfig").invoke(core);
+            Method getBoolean = fastLoginConfig.getClass()
+                    .getMethod("getBoolean", String.class, boolean.class);
+            boolean autoRegister = (boolean) getBoolean.invoke(fastLoginConfig, "autoRegister", false);
+            boolean autoLogin = (boolean) getBoolean.invoke(fastLoginConfig, "autoLogin", false);
+            boolean premiumUuid = (boolean) getBoolean.invoke(fastLoginConfig, "premiumUuid", false);
+            if (!autoRegister || !autoLogin || !premiumUuid) {
+                plugin.getLogger().warning("FastLogin requiere autoRegister=true, autoLogin=true y premiumUuid=true.");
+                return false;
+            }
+
             Object existingHook = core.getClass().getMethod("getAuthPluginHook").invoke(core);
             if (existingHook != null) {
                 plugin.getLogger().warning("FastLogin ya tiene otro hook de autenticación. SpigotAuth no lo reemplazará.");
