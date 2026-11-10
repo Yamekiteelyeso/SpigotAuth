@@ -1,56 +1,90 @@
-# SpigotAuth Smart Authentication — feasibility decision
+# SpigotAuth Smart Authentication — protocol design and implementation status
 
-## Requested behavior
+## Required behavior
 
-- One standalone Paper/Spigot server (no FastLogin, ProtocolLib, AuthMe, Velocity, or BungeeCord).
+- One standalone server, with no FastLogin, ProtocolLib, AuthMe, Velocity, or BungeeCord dependency.
 - Premium and offline/cracked Java clients can join the same server.
-- Premium accounts are authenticated automatically on first connection, registered automatically, and receive their real Mojang UUID.
-- Offline accounts use the local `/register` and `/login` flow.
+- A premium player is verified automatically, auto-registered on first join, and receives the authenticated Mojang UUID.
+- Offline players use the local `/register` and `/login` flow.
+- Target baseline: Paper 1.20.1, Java 17. Spigot compatibility must be evaluated separately.
 
-## Blocking protocol constraint (Java 1.20.1)
+## Important correction: selective premium challenges exist
 
-A server cannot securely prove that an offline-mode connection owns a public Mojang profile merely by looking up the username. The profile endpoint proves that a profile exists, not that the connecting client controls it.
+The earlier feasibility note incorrectly concluded that the mixed-mode behavior could not be achieved transparently with unmodified clients.
 
-The ownership proof used by the vanilla Java login protocol is the encrypted login challenge:
-1. Server sends an Encryption Request with its public key and verify token.
-2. Client authenticates its access token with the Minecraft session service (`join`).
-3. Client returns the encrypted shared secret and verify token.
-4. Server enables AES/CFB8 and validates the session with `hasJoined`, receiving the authenticated profile UUID.
+nLogin documents selective online authentication challenges in offline-mode:
+- `challenge-if-premium-uuid` (documented for 1.19.1+).
+- `challenge-if-premium-nickname`.
+- A premium-name restriction option is also documented.
 
-On Java 1.20.1, sending that request to a vanilla offline/cracked client causes the client to attempt session authentication and disconnect when it has no valid premium session. Therefore, sending the challenge to every connection breaks the required cracked-player support. Skipping the challenge preserves cracked access but removes the proof of account ownership. A public profile lookup, matching username, client-supplied UUID, or cached result is not a safe substitute.
+This establishes that a server can selectively challenge connections it classifies as premium instead of challenging every offline-mode connection. A cracked client attempting to claim a protected premium identity must not be granted that identity; a cracked player using an unclaimed/offline identity can continue through local authentication.
 
-This is a client protocol limitation, not something a Bukkit event listener can fix. `PlayerJoinEvent` and ordinary Bukkit authentication hooks run after the login identity has already been selected.
+Official reference: https://docs.nickuc.com/es/nlogin/config/template/
 
-## Decision
+This document describes the protocol behavior only. It does not copy nLogin code or claim that SpigotAuth already implements it.
 
-Do not implement a fake premium detector that auto-registers based on a profile lookup. Do not mark a player authenticated because their username exists on Mojang. That would allow anyone to impersonate a premium username on an offline-mode server.
+## Why a normal Bukkit listener is insufficient
 
-For the exact requested combination on unmodified 1.20.1 clients, there is no secure, transparent server-only handshake that both proves premium ownership and lets cracked clients pass through the same handshake unchanged.
+The ownership challenge belongs to the Minecraft login protocol, before Bukkit's `PlayerJoinEvent` and before the final player profile/UUID is established.
 
-## Supported paths
+The relevant Java login exchange is:
+1. Client sends Login Start.
+2. Server optionally sends an Encryption Request containing its public key and verify token.
+3. A premium client completes its authenticated session exchange and returns the encrypted response.
+4. Server validates the response and asks the Minecraft session service `hasJoined` for the authenticated profile.
+5. The server must use the UUID returned by that verified session before creating the Bukkit player.
 
-### A. Secure premium verification
-Run the server in `online-mode=true`. Vanilla Minecraft authenticates the premium account and supplies the real UUID. This is secure and automatic, but cracked clients cannot join.
+A public Mojang profile lookup is only a discovery signal. It is not proof of ownership and must never trigger auto-login by itself.
 
-### B. Mixed premium + offline access
-Keep `online-mode=false`. All players use local authentication. Mojang profile lookup may be displayed as informational only; it must never bypass `/login` or `/register`. This supports both client types, but does not provide automatic premium ownership verification or guaranteed premium UUIDs.
+Protocol reference: https://minecraft.wiki/w/Java_Edition_protocol/Encryption
 
-### C. Mixed access with premium auto-login
-Requires an explicit additional trust mechanism, such as a client-side authentication mod/launcher integration, or a separately authenticated account-linking flow. The user has explicitly rejected OAuth/device-code setup and external plugin dependencies, so this is not silently introduced.
+## Implementation boundary for Paper 1.20.1
 
-## Implementation guardrails
+Paper's public Bukkit/Paper plugin API does not expose a supported event that lets a plugin replace the login authentication decision before the server finalizes the profile. The challenge therefore needs a version-specific login-layer integration, such as a carefully isolated NMS/connection adapter or a server-side patch.
 
-- Never trust a player name, profile lookup, client-provided UUID, or offline UUID as proof of premium ownership.
-- Never silently fall back from a failed premium verification to a premium identity.
-- Mojang/session-service outages must fail closed for premium verification.
-- Preserve the existing local password flow for offline-mode users.
-- Do not claim the feature is implemented or tested until an actual protocol implementation passes premium and cracked-client integration tests.
+Paper documents NMS as unstable and not guaranteed to remain compatible across versions:
+https://docs.papermc.io/paper/dev/internals/
 
-## Required acceptance tests before claiming completion
+The adapter must:
+- Intercept the login flow before the vanilla offline profile is finalized.
+- Classify the login without treating a username lookup as authentication.
+- Challenge only identities selected for premium verification.
+- Validate the encrypted response and the session-service `hasJoined` result.
+- Set the authenticated Mojang profile/UUID before player creation.
+- Let non-premium identities continue through the normal offline login path.
+- Reject an offline client attempting to impersonate a protected premium identity.
+- Fail closed for a premium challenge if the session service is unavailable, times out, or returns an invalid response. Never downgrade that connection into a cracked identity with the same protected name.
+- Avoid global online-mode toggles; they are process-wide and unsafe for concurrent connections.
+- Keep all cryptographic/session work off the main server thread and protect against duplicate/concurrent login attempts.
 
-1. Premium Java 1.20.1 client: ownership proof succeeds and authenticated Mojang UUID is used.
-2. Offline/cracked Java 1.20.1 client: can still connect and use local registration/login.
-3. Premium username impersonation from an offline client: never receives premium identity or automatic authentication.
-4. Invalid/revoked premium session: rejected as premium.
-5. Mojang/session-service timeout, rate limit, and 5xx: no premium bypass.
-6. Reconnect, duplicate connections, and concurrent login attempts: no identity mix-up.
+No external plugin dependency is required by this design. However, an NMS adapter is tied to the exact server implementation/version and must be tested against the exact Paper 1.20.1 build. Spigot support cannot be claimed until separately verified.
+
+## Current repository implementation status
+
+Implemented today:
+- Local password registration/login.
+- Password hashing and lockout/timeout behavior.
+- Informational Mojang profile lookup.
+- In online-mode, automatic authentication based on the server's own successful vanilla session verification.
+
+Not implemented yet:
+- Selective pre-join premium challenge in offline-mode.
+- Session-service `hasJoined` verification for that selective challenge.
+- Applying the verified premium UUID before Bukkit player creation.
+- Automatic premium registration in mixed mode.
+
+The current `PremiumChecker` is informational only. It must not be used to bypass local authentication in offline-mode.
+
+## Acceptance tests required before enabling Smart Authentication
+
+1. Premium Java 1.20.1 client: challenge succeeds; the session service returns the profile; Bukkit sees the real Mojang UUID; no password prompt.
+2. First premium connection: account is created automatically and linked to the verified UUID.
+3. Returning premium connection: auto-login succeeds without a password.
+4. Offline/cracked client with a non-premium name: can connect and use `/register` and `/login`.
+5. Offline client impersonating a protected premium name: rejected before player creation.
+6. Invalid/revoked premium session: rejected; never falls back to offline identity.
+7. Session-service timeout, rate limit, 5xx, and malformed responses: no premium bypass and no identity downgrade.
+8. Concurrent connections with the same name, duplicate sessions, reconnects, and disconnects: no cross-connection identity mix-up.
+9. Verify behavior on the exact Paper 1.20.1 build. Test Spigot independently before advertising compatibility.
+
+Do not advertise Smart Authentication as implemented until these tests pass.
