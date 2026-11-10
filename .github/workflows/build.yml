@@ -20,6 +20,6 @@ jobs:
         run: mvn -B clean verify
       - uses: actions/upload-artifact@v4
         with:
-          name: SpigotAuth-1.1.0
-          path: target/SpigotAuth-1.1.0.jar
+          name: SpigotAuth-1.2.0
+          path: target/SpigotAuth-1.2.0.jar
           if-no-files-found: error
