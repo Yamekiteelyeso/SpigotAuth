@@ -38,14 +38,16 @@ class MinecraftSessionServiceTest {
     @Test
     void rejectsInvalidNamesBeforeMakingNetworkRequest() {
         var service = new MinecraftSessionService();
-        assertThrows(IllegalArgumentException.class,
-                () -> service.hasJoined("../Notch", "0123456789abcdef"));
+        var error = assertThrows(java.util.concurrent.CompletionException.class,
+                () -> service.hasJoined("../Notch", "0123456789abcdef").join());
+        assertTrue(error.getCause() instanceof IllegalArgumentException);
     }
 
     @Test
     void rejectsInvalidServerHashesBeforeMakingNetworkRequest() {
         var service = new MinecraftSessionService();
-        assertThrows(IllegalArgumentException.class,
-                () -> service.hasJoined("Notch", "not-a-hash"));
+        var error = assertThrows(java.util.concurrent.CompletionException.class,
+                () -> service.hasJoined("Notch", "not-a-hash").join());
+        assertTrue(error.getCause() instanceof IllegalArgumentException);
     }
 }
