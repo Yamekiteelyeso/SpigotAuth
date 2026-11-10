@@ -133,3 +133,17 @@ JUnit tests cover valid encrypted responses, incorrect tokens, and defensive cop
 `MinecraftCipherFactory` now creates independent JDK `AES/CFB8/NoPadding` encrypt/decrypt ciphers using the 16-byte shared secret as both AES key and IV, matching the Java Edition login encryption setup. It rejects unsupported cipher modes and invalid key lengths. Unit tests verify a stream round-trip and invalid inputs.
 
 This is a transport primitive only. It is not installed into a live Netty pipeline and must not be treated as a completed login adapter. The next integration task must preserve packet ordering and switch both channel directions only after the RSA verify token has passed.
+
+
+## Premium handshake coordinator added
+
+`PremiumLoginHandshake` composes the existing primitives for one premium candidate login:
+- exposes the encoded server public key and per-login verify token for an Encryption Request;
+- validates/decrypts the RSA response before any session-service request;
+- computes the signed server hash from server ID, shared secret, and server public key;
+- calls an injected session verifier and accepts only a non-null profile whose name matches the login name;
+- returns the shared secret and verified profile together for the future Paper adapter.
+
+Tests verify that a bad verify token never reaches the session verifier, a successful flow returns the verified profile and secret, and a missing Mojang profile is rejected.
+
+This coordinator still does not send packets, switch the Netty channel to AES/CFB8, or inject the verified profile into Paper's pre-join login state machine. It is an integration-ready core, not a functioning server login adapter.
