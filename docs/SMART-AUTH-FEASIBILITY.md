@@ -126,3 +126,10 @@ These tests do not constitute a live Premium/Cracked integration test. A real cl
 4. Returns defensive copies of the challenge token.
 
 JUnit tests cover valid encrypted responses, incorrect tokens, and defensive copying. This primitive is not yet connected to a live Netty channel; it does not install AES/CFB8 stream ciphers, replace the login listener, or create the verified GameProfile. Those steps remain part of the Paper 1.20.1 adapter.
+
+
+## AES/CFB8 transport primitive added
+
+`MinecraftCipherFactory` now creates independent JDK `AES/CFB8/NoPadding` encrypt/decrypt ciphers using the 16-byte shared secret as both AES key and IV, matching the Java Edition login encryption setup. It rejects unsupported cipher modes and invalid key lengths. Unit tests verify a stream round-trip and invalid inputs.
+
+This is a transport primitive only. It is not installed into a live Netty pipeline and must not be treated as a completed login adapter. The next integration task must preserve packet ordering and switch both channel directions only after the RSA verify token has passed.
