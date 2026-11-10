@@ -32,6 +32,8 @@ Keep FastLogin's own database enabled. It records the premium status needed for 
 - `nameChangeCheck: false` avoids relying on name-change heuristics for account ownership.
 - `auto-register-unknown: false` avoids silently taking over a pre-existing local account.
 
+SpigotAuth checks these three required FastLogin settings at startup. If any is disabled, it will not install the premium bridge. With `autoRegister: true`, a cracked player cannot use the name of an existing premium Java profile; FastLogin requires a valid premium session for that name. This is intentional protection against premium-name impersonation.
+
 Restart the server after changing FastLogin's configuration.
 
 If you do not want FastLogin to display its generated registration password to the player, open `plugins/FastLogin/messages.yml` and set the `auto-register` message to an empty value. SpigotAuth stores only the password hash; the generated password is not needed for normal premium auto-login.
@@ -42,7 +44,7 @@ If you do not want FastLogin to display its generated registration password to t
 2. The client proves possession of a valid Minecraft session through the official session verification flow.
 3. FastLogin passes the verified player to its authentication hook.
 4. SpigotAuth's bridge checks the local account and the persistent premium UUID association.
-5. A new premium account is registered with a cryptographically random password that is never disclosed or stored in plaintext, then linked to the verified premium UUID.
+5. A new premium account is registered with a cryptographically random password and linked to the verified premium UUID. Only its hash is stored by SpigotAuth.
 6. A previously linked premium account is authenticated automatically.
 7. A local account that exists but is not linked to that premium UUID is **not** auto-authenticated. Its owner must use the existing local password. This prevents a premium login from silently taking over a cracked account with the same name.
 8. Players that FastLogin classifies as cracked continue to use `/login` or `/register`.
