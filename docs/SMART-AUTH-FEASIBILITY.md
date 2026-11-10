@@ -94,3 +94,24 @@ The current `PremiumChecker` is informational only. It must not be used to bypas
 9. Verify behavior on the exact Paper 1.20.1 build. Test Spigot independently before advertising compatibility.
 
 Do not advertise Smart Authentication as implemented until these tests pass.
+
+
+## Protocol implementation notes (Paper 1.20.1)
+
+The Java Edition login protocol supports an Encryption Request even when the server is operating in offline mode. A vanilla premium client performs the launcher/session authentication and returns an Encryption Response; the server decrypts the shared secret and verify token, checks the token, computes the Minecraft signed SHA-1 server hash, and calls `hasJoined`. Only a successful response is an authenticated premium identity.
+
+For 1.20.1, the relevant internal entry points are `ServerLoginPacketListenerImpl.handleHello` and `ServerLoginPacketListenerImpl.handleKey`; the corresponding packet exposes decryption of the secret and challenge validation. These are NMS internals, not Bukkit API contracts. Their names/signatures are version- and mapping-dependent. A standalone plugin adapter would need a Paper-specific integration strategy and lifecycle-safe interception before the login listener finishes profile creation. Reflectively replacing a private listener or mutating the pipeline without a tested compatibility layer is not accepted as production-ready.
+
+References used for protocol design:
+- Minecraft Java Edition protocol encryption: Encryption Request/Response, shared-secret verification and session-server hash.
+- Minecraft 1.20.1 mappings for ServerLoginPacketListenerImpl and ServerboundKeyPacket.
+
+## Automated tests added
+
+JUnit tests cover:
+- Mojang profile UUID normalization.
+- Rejection of a session response whose name differs from Login Start.
+- Rejection of malformed responses.
+- Input validation before network requests.
+
+These tests do not constitute a live Premium/Cracked integration test. A real client test matrix remains mandatory.
