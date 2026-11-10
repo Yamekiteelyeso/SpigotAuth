@@ -3,8 +3,13 @@ min-password-length: 8
 max-password-length: 64
 max-attempts: 5
 lock-minutes: 5
-login-timeout-seconds: 60
+login-timeout-seconds: 180
 
-# Detección de perfiles Java en la API oficial de Mojang.
-# Se usa solo como información en servidores offline-mode.
+# Detección informativa de perfiles públicos por Mojang.
 premium-cache-minutes: 10
+
+# Verificación REAL de propiedad en online-mode=false.
+# Registra una aplicación pública en Microsoft Entra ID que admita
+# cuentas personales y habilita el flujo de autorización por dispositivo.
+# Pega aquí el Application (client) ID. No se necesita client secret.
+microsoft-client-id: "PON_AQUI_TU_CLIENT_ID"
