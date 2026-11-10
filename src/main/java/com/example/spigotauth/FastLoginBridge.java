@@ -134,7 +134,7 @@ public final class FastLoginBridge {
     }
 
     private synchronized boolean authenticatePremium(Player player, String suppliedPassword) {
-        if (player == null || !player.isOnline()) {
+        if (player == null || !runOnMainThread(player::isOnline)) {
             return false;
         }
 
