@@ -67,6 +67,7 @@ public final class AuthCommand implements CommandExecutor {
             }
 
             auth.markAuthenticated(player);
+            plugin.getFastLoginBridge().linkAfterPasswordAuthentication(player);
             player.sendMessage(ChatColor.GRAY + "Tu cuenta quedó registrada correctamente.");
             return true;
         }
@@ -84,6 +85,7 @@ public final class AuthCommand implements CommandExecutor {
             }
             if (accounts.check(name, args[0])) {
                 auth.markAuthenticated(player);
+                plugin.getFastLoginBridge().linkAfterPasswordAuthentication(player);
                 player.sendMessage(ChatColor.GRAY + "¡Qué bueno tenerte de vuelta!");
             } else {
                 auth.registerFailure(player);
