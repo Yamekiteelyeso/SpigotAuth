@@ -9,10 +9,6 @@ login-timeout-seconds: 60
 # FastLogin + ProtocolLib realizan la verificación criptográfica de sesión.
 smart-auth:
   enabled: true
-  provider: FASTLOGIN
-  auto-register-premium: true
-  premium-uuid: true
-  require-existing-account-link: true
 
 # Detección informativa de perfiles públicos por Mojang.
 # Nunca se utiliza como prueba de propiedad.
