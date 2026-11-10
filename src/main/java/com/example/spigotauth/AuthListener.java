@@ -25,7 +25,7 @@ import java.util.Set;
 public final class AuthListener implements Listener {
 
     private static final Set<String> ALLOWED_COMMANDS =
-            Set.of("login", "register", "premiumlogin");
+            Set.of("login", "register", "premiumlogin", "plogin", "premium");
     private final SpigotAuth plugin;
 
     public AuthListener(SpigotAuth plugin) {
