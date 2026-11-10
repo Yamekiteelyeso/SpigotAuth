@@ -5,14 +5,17 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import java.io.File;
 import java.io.IOException;
 import java.util.Locale;
+import java.util.logging.Logger;
 
 public final class AccountStore {
 
     private final File file;
     private final YamlConfiguration config;
+    private final Logger logger;
 
-    public AccountStore(File file) {
+    public AccountStore(File file, Logger logger) {
         this.file = file;
+        this.logger = logger;
         File parent = file.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw new IllegalStateException("No se pudo crear el directorio de datos de SpigotAuth.");
@@ -37,8 +40,7 @@ public final class AccountStore {
             return true;
         } catch (IOException exception) {
             config.set(path, null);
-            SpigotAuth.getInstance().getLogger().severe(
-                    "No se pudo guardar accounts.yml: " + exception.getMessage());
+            logger.severe("No se pudo guardar accounts.yml: " + exception.getMessage());
             return false;
         }
     }
