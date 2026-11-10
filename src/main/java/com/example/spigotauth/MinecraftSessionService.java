@@ -109,7 +109,7 @@ public final class MinecraftSessionService {
                 });
     }
 
-    private static VerifiedProfile parseVerifiedProfile(String requestedName, String body) {
+    static VerifiedProfile parseVerifiedProfile(String requestedName, String body) {
         Matcher idMatcher = ID.matcher(body);
         Matcher nameMatcher = NAME.matcher(body);
         if (!idMatcher.find() || !nameMatcher.find()) {
