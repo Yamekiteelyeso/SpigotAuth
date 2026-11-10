@@ -5,6 +5,15 @@ max-attempts: 5
 lock-minutes: 5
 login-timeout-seconds: 60
 
-# Detección de perfiles Java en la API oficial de Mojang.
-# Se usa solo como información en servidores offline-mode.
+# Smart Authentication para servidores standalone offline-mode.
+# FastLogin + ProtocolLib realizan la verificación criptográfica de sesión.
+smart-auth:
+  enabled: true
+  provider: FASTLOGIN
+  auto-register-premium: true
+  premium-uuid: true
+  require-existing-account-link: true
+
+# Detección informativa de perfiles públicos por Mojang.
+# Nunca se utiliza como prueba de propiedad.
 premium-cache-minutes: 10
