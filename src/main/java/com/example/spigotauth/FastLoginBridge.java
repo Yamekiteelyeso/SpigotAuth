@@ -77,6 +77,50 @@ public final class FastLoginBridge {
         return installed;
     }
 
+    /**
+     * If a player had to use their existing local password once, bind that
+     * account only when FastLogin independently reports a verified premium
+     * session for the same online UUID.
+     */
+    public void linkAfterPasswordAuthentication(Player player) {
+        if (!installed || player == null || !player.isOnline()) {
+            return;
+        }
+
+        try {
+            Plugin fastLogin = Bukkit.getPluginManager().getPlugin(FASTLOGIN_PLUGIN);
+            if (fastLogin == null || !fastLogin.isEnabled()) {
+                return;
+            }
+
+            Object status = fastLogin.getClass()
+                    .getMethod("getStatus", UUID.class)
+                    .invoke(fastLogin, player.getUniqueId());
+            if (status == null || !"PREMIUM".equalsIgnoreCase(status.toString())) {
+                return;
+            }
+
+            String name = player.getName();
+            UUID premiumUuid = player.getUniqueId();
+            if (!plugin.getAccounts().isRegistered(name)) {
+                return;
+            }
+            if (!plugin.getPremiumAccounts().canLink(name, premiumUuid)) {
+                plugin.getLogger().warning("No se vinculó " + name
+                        + ": el nombre ya pertenece a otro UUID premium.");
+                return;
+            }
+            if (!plugin.getPremiumAccounts().isLinked(name, premiumUuid)
+                    && plugin.getPremiumAccounts().link(name, premiumUuid)) {
+                player.sendMessage(org.bukkit.ChatColor.GREEN
+                        + "Tu cuenta local quedó vinculada a tu identidad premium verificada.");
+            }
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException exception) {
+            plugin.getLogger().warning("No se pudo comprobar el estado premium para vincular "
+                    + player.getName() + ": " + exception.getMessage());
+        }
+    }
+
     private Object invokeHook(Object proxy, Method method, Object[] args) throws Throwable {
         return switch (method.getName()) {
             case "isRegistered" -> plugin.getAccounts().isRegistered((String) args[0]);
