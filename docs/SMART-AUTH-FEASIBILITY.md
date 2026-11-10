@@ -115,3 +115,14 @@ JUnit tests cover:
 - Input validation before network requests.
 
 These tests do not constitute a live Premium/Cracked integration test. A real client test matrix remains mandatory.
+
+
+## Cryptographic challenge primitive added
+
+`PremiumEncryptionChallenge` now implements the JDK-only cryptographic portion of the login exchange:
+1. Generates a fresh 4-byte verify token using `SecureRandom`.
+2. Decrypts the client's RSA/PKCS#1 v1.5 encrypted verify token and compares it in constant time.
+3. Decrypts the RSA-encrypted shared secret and requires exactly 16 bytes before returning an AES key.
+4. Returns defensive copies of the challenge token.
+
+JUnit tests cover valid encrypted responses, incorrect tokens, and defensive copying. This primitive is not yet connected to a live Netty channel; it does not install AES/CFB8 stream ciphers, replace the login listener, or create the verified GameProfile. Those steps remain part of the Paper 1.20.1 adapter.
