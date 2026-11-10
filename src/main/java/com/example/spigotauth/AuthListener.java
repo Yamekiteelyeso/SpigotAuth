@@ -19,115 +19,157 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPickupItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
+import java.util.Locale;
 import java.util.Set;
 
-public class AuthListener implements Listener {
+public final class AuthListener implements Listener {
 
-    private final SpigotAuth plugin;
     private static final Set<String> ALLOWED_COMMANDS = Set.of("login", "register");
+    private final SpigotAuth plugin;
 
     public AuthListener(SpigotAuth plugin) {
         this.plugin = plugin;
     }
 
-    private boolean blocked(Player p) {
-        return !plugin.getAuth().isAuthenticated(p);
+    private boolean blocked(Player player) {
+        return !plugin.getAuth().isAuthenticated(player);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onJoin(PlayerJoinEvent e) {
-        Player p = e.getPlayer();
-        e.setJoinMessage(null);
-        plugin.getAuth().startTimeout(p);
+    public void onJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        event.setJoinMessage(null);
+        plugin.getAuth().startTimeout(player);
 
-        plugin.getPremium().check(p.getName(), isPremium -> {
-            if (!p.isOnline()) return;
-            if (isPremium) {
-                plugin.getAuth().markPremium(p);
-                p.sendMessage(ChatColor.GOLD + "Cuenta premium detectada. "
-                        + ChatColor.WHITE + "La verificación automática aún no está activa: usa tu contraseña.");
+        // En online-mode, el propio servidor ya validó la sesión con los
+        // servidores de autenticación de Minecraft. Esa es una prueba real.
+        if (plugin.getServer().getOnlineMode()) {
+            plugin.getAuth().markAuthenticated(player);
+            player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            player.sendMessage(ChatColor.GREEN + "✔ " + ChatColor.WHITE
+                    + "Tu cuenta fue verificada por Minecraft.");
+            player.sendMessage(ChatColor.GRAY + "Bienvenido, " + ChatColor.AQUA + player.getName()
+                    + ChatColor.GRAY + ". Ya puedes jugar.");
+            player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            return;
+        }
+
+        // En offline-mode solo se informa del perfil. No se omite el login:
+        // cualquier usuario podría entrar usando el nombre de otra persona.
+        plugin.getPremium().check(player.getName(), result -> {
+            if (!player.isOnline()) return;
+
+            player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            switch (result.status()) {
+                case PREMIUM -> player.sendMessage(ChatColor.GOLD + "★ "
+                        + ChatColor.WHITE + "Encontramos un perfil de Minecraft Java para tu nombre.");
+                case NOT_FOUND -> player.sendMessage(ChatColor.GRAY
+                        + "No encontramos un perfil premium con este nombre.");
+                case UNAVAILABLE -> player.sendMessage(ChatColor.YELLOW
+                        + "No pudimos consultar Mojang ahora mismo. Puedes continuar con tu contraseña.");
             }
-            if (plugin.getAccounts().isRegistered(p.getName())) {
-                p.sendMessage(ChatColor.AQUA + "Usa /login <contraseña> para entrar.");
+
+            if (plugin.getAccounts().isRegistered(player.getName())) {
+                player.sendMessage(ChatColor.AQUA + "» " + ChatColor.WHITE
+                        + "Inicia sesión con " + ChatColor.YELLOW + "/login <contraseña>");
             } else {
-                p.sendMessage(ChatColor.AQUA + "Usa /register <contraseña> <confirmar> para crear tu cuenta.");
+                player.sendMessage(ChatColor.AQUA + "» " + ChatColor.WHITE
+                        + "Crea tu cuenta con " + ChatColor.YELLOW
+                        + "/register <contraseña> <confirmar>");
             }
+            player.sendMessage(ChatColor.GRAY + "Tienes "
+                    + plugin.getConfig().getLong("login-timeout-seconds", 60)
+                    + " segundos para autenticarte.");
+            player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         });
     }
 
     @EventHandler
-    public void onQuit(PlayerQuitEvent e) {
-        e.setQuitMessage(null);
-        plugin.getAuth().clear(e.getPlayer());
+    public void onQuit(PlayerQuitEvent event) {
+        event.setQuitMessage(null);
+        plugin.getAuth().clear(event.getPlayer());
     }
 
     @EventHandler
-    public void onMove(PlayerMoveEvent e) {
-        Player p = e.getPlayer();
-        if (!blocked(p)) return;
-        Location from = e.getFrom();
-        Location to = e.getTo();
+    public void onMove(PlayerMoveEvent event) {
+        Player player = event.getPlayer();
+        if (!blocked(player)) return;
+
+        Location from = event.getFrom();
+        Location to = event.getTo();
         if (to == null) return;
         if (from.getBlockX() == to.getBlockX()
                 && from.getBlockY() == to.getBlockY()
-                && from.getBlockZ() == to.getBlockZ()) {
-            return; // solo rotación de cabeza, se permite
-        }
+                && from.getBlockZ() == to.getBlockZ()) return;
+
         Location fixed = from.clone();
         fixed.setYaw(to.getYaw());
         fixed.setPitch(to.getPitch());
-        e.setTo(fixed);
+        event.setTo(fixed);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onChat(AsyncPlayerChatEvent e) {
-        if (!blocked(e.getPlayer())) return;
-        e.setCancelled(true);
-        e.getPlayer().sendMessage(ChatColor.RED + "Inicia sesión para hablar.");
+    public void onChat(AsyncPlayerChatEvent event) {
+        if (!blocked(event.getPlayer())) return;
+        event.setCancelled(true);
+        Player player = event.getPlayer();
+        plugin.getServer().getScheduler().runTask(plugin,
+                () -> player.sendMessage(ChatColor.RED + "✖ " + ChatColor.GRAY
+                        + "Primero debes iniciar sesión para hablar."));
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onCommand(PlayerCommandPreprocessEvent e) {
-        if (!blocked(e.getPlayer())) return;
-        String word = e.getMessage().substring(1).split(" ")[0].toLowerCase();
-        if (!ALLOWED_COMMANDS.contains(word)) {
-            e.setCancelled(true);
-            e.getPlayer().sendMessage(ChatColor.RED + "Inicia sesión primero.");
+    public void onCommand(PlayerCommandPreprocessEvent event) {
+        if (!blocked(event.getPlayer())) return;
+        String message = event.getMessage();
+        String command = message.substring(1).split("\\s+", 2)[0];
+        int namespace = command.indexOf(':');
+        if (namespace >= 0) command = command.substring(namespace + 1);
+        command = command.toLowerCase(Locale.ROOT);
+
+        if (!ALLOWED_COMMANDS.contains(command)) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(ChatColor.RED + "✖ " + ChatColor.GRAY
+                    + "Debes autenticarte antes de usar comandos.");
         }
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onBreak(BlockBreakEvent e) {
-        if (blocked(e.getPlayer())) e.setCancelled(true);
+    public void onBreak(BlockBreakEvent event) {
+        if (blocked(event.getPlayer())) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onPlace(BlockPlaceEvent e) {
-        if (blocked(e.getPlayer())) e.setCancelled(true);
+    public void onPlace(BlockPlaceEvent event) {
+        if (blocked(event.getPlayer())) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onInteract(PlayerInteractEvent e) {
-        if (blocked(e.getPlayer())) e.setCancelled(true);
+    public void onInteract(PlayerInteractEvent event) {
+        if (blocked(event.getPlayer())) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onInventory(InventoryOpenEvent e) {
-        if (e.getPlayer() instanceof Player p && blocked(p)) e.setCancelled(true);
+    public void onInventory(InventoryOpenEvent event) {
+        if (event.getPlayer() instanceof Player player && blocked(player)) {
+            event.setCancelled(true);
+        }
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onDrop(PlayerDropItemEvent e) {
-        if (blocked(e.getPlayer())) e.setCancelled(true);
+    public void onDrop(PlayerDropItemEvent event) {
+        if (blocked(event.getPlayer())) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onPickup(PlayerPickupItemEvent e) {
-        if (blocked(e.getPlayer())) e.setCancelled(true);
+    public void onPickup(PlayerPickupItemEvent event) {
+        if (blocked(event.getPlayer())) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onDamage(EntityDamageEvent e) {
-        if (e.getEntity() instanceof Player p && blocked(p)) e.setCancelled(true);
+    public void onDamage(EntityDamageEvent event) {
+        if (event.getEntity() instanceof Player player && blocked(player)) {
+            event.setCancelled(true);
+        }
     }
 }
