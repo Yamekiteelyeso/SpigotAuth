@@ -14,7 +14,7 @@ public final class SpigotAuth extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
 
-        accounts = new AccountStore(new File(getDataFolder(), "accounts.yml"));
+        accounts = new AccountStore(new File(getDataFolder(), "accounts.yml"), getLogger());
         premium = new PremiumChecker(this,
                 getConfig().getLong("premium-cache-minutes", 10) * 60_000L);
         auth = new AuthManager(this);
