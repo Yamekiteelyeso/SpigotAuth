@@ -1,13 +1,15 @@
 name: SpigotAuth
-version: 1.0.0
+version: 1.1.0
 main: com.example.spigotauth.SpigotAuth
 api-version: '1.20'
-author: TuNombre
-description: Registro y login para servidores Paper/Spigot con detección premium.
+author: Yamekiteelyeso
+description: Autenticación segura para servidores Paper y Spigot con detección de perfiles Minecraft Java.
 commands:
   register:
-    description: Registra tu cuenta.
+    description: Crea una cuenta protegida con contraseña.
     usage: /register <contraseña> <confirmar>
+    aliases: [reg]
   login:
-    description: Inicia sesión.
+    description: Inicia sesión en tu cuenta.
     usage: /login <contraseña>
+    aliases: [l]
