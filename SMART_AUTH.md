@@ -34,6 +34,8 @@ Keep FastLogin's own database enabled. It records the premium status needed for 
 
 Restart the server after changing FastLogin's configuration.
 
+If you do not want FastLogin to display its generated registration password to the player, open `plugins/FastLogin/messages.yml` and set the `auto-register` message to an empty value. SpigotAuth stores only the password hash; the generated password is not needed for normal premium auto-login.
+
 ## How the bridge works
 
 1. FastLogin intercepts the login protocol before the Bukkit player joins.
