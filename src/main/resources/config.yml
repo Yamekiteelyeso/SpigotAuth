@@ -3,7 +3,7 @@ min-password-length: 8
 max-password-length: 64
 max-attempts: 5
 lock-minutes: 5
-login-timeout-seconds: 180
+login-timeout-seconds: 600
 
 # Detección informativa de perfiles públicos por Mojang.
 premium-cache-minutes: 10
