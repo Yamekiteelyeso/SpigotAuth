@@ -1,0 +1,5 @@
+min-password-length: 6
+max-attempts: 5
+lock-minutes: 5
+login-timeout-seconds: 60
+premium-cache-minutes: 10

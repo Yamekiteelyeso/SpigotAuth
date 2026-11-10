@@ -1,0 +1,13 @@
+name: SpigotAuth
+version: 1.0.0
+main: com.example.spigotauth.SpigotAuth
+api-version: '1.20'
+author: TuNombre
+description: Registro y login para servidores Paper/Spigot con detección premium.
+commands:
+  register:
+    description: Registra tu cuenta.
+    usage: /register <contraseña> <confirmar>
+  login:
+    description: Inicia sesión.
+    usage: /login <contraseña>
