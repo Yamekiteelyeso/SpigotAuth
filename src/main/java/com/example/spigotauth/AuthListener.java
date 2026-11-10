@@ -59,11 +59,8 @@ public final class AuthListener implements Listener {
                     + "Comprobando tu sesión premium de Minecraft...");
             // FastLogin completes its protocol/session verification asynchronously.
             // Only show local credentials if it did not authenticate the player.
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (player.isOnline() && !plugin.getAuth().isAuthenticated(player)) {
-                    sendLocalLoginInstructions(player);
-                }
-            }, 20L);
+            waitForFastLogin(player, 10);
+
             return;
         }
 
@@ -82,6 +79,23 @@ public final class AuthListener implements Listener {
             }
             sendLocalLoginInstructions(player);
         });
+    }
+
+    private void waitForFastLogin(Player player, int checksRemaining) {
+        if (!player.isOnline() || plugin.getAuth().isAuthenticated(player)) {
+            return;
+        }
+
+        String status = plugin.getFastLoginBridge().getVerifiedStatus(player);
+        if ("PREMIUM".equals(status) || "CRACKED".equals(status) || checksRemaining <= 0) {
+            if (!plugin.getAuth().isAuthenticated(player)) {
+                sendLocalLoginInstructions(player);
+            }
+            return;
+        }
+
+        Bukkit.getScheduler().runTaskLater(plugin,
+                () -> waitForFastLogin(player, checksRemaining - 1), 10L);
     }
 
     private void sendLocalLoginInstructions(Player player) {
