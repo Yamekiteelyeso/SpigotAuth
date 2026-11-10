@@ -162,3 +162,14 @@ This is useful for a version-specific adapter, but does not itself provide a plu
 The adapter design therefore remains constrained to a tested interception point that preserves the vanilla listener's state machine. If no safe interception point exists on Paper 1.20.1, the honest standalone option is a small version-specific NMS adapter with explicit compatibility checks—not pretending a Bukkit join listener can authenticate a premium client before join.
 
 Reference: mappings.dev, Minecraft 1.20.1 `ServerLoginPacketListenerImpl` field/method map.
+
+
+## Network hook availability check
+
+The Paper 1.20.1 public API class index does not contain `ChannelInitializeListener` or `ChannelInitializeListenerHolder`. A similarly named listener mechanism discussed in later Paper development contexts must not be assumed to exist in the 1.20.1 API. This rules out treating that mechanism as a supported compile-time hook for this target.
+
+A plugin may still be able to reach internal channel initialization through version-specific Paper/NMS internals, but that would require verifying the exact Paper 1.20.1 server artifact and its initialization order. Merely adding a Netty handler after `PlayerJoinEvent` is too late for the required Login Start / Encryption Request exchange. No generic Bukkit event can replace this missing pre-join hook.
+
+References:
+- Paper 1.20.1 API class index: https://jd.papermc.io/paper/1.20.1/allclasses-index.html
+- Paper NMS compatibility warning: https://docs.papermc.io/paper/dev/internals/
