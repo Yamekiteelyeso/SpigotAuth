@@ -147,3 +147,18 @@ This is a transport primitive only. It is not installed into a live Netty pipeli
 Tests verify that a bad verify token never reaches the session verifier, a successful flow returns the verified profile and secret, and a missing Mojang profile is rejected.
 
 This coordinator still does not send packets, switch the Netty channel to AES/CFB8, or inject the verified profile into Paper's pre-join login state machine. It is an integration-ready core, not a functioning server login adapter.
+
+
+## Paper 1.20.1 login listener inspection
+
+The 1.20.1 mappings confirm the login listener has:
+- a public constructor accepting `MinecraftServer` and `Connection`;
+- public `handleHello(ServerboundHelloPacket)` and `handleKey(ServerboundKeyPacket)` methods;
+- private challenge and state fields, plus a mutable profile field;
+- private player-placement logic after the login state machine accepts the profile.
+
+This is useful for a version-specific adapter, but does not itself provide a plugin hook. In particular, the private state/challenge and private player-placement method mean that constructing a second listener or changing the profile reflectively would risk bypassing vanilla's login checks, duplicate-session checks, event ordering, and thread transitions. We will not ship a reflective listener swap based only on these mappings.
+
+The adapter design therefore remains constrained to a tested interception point that preserves the vanilla listener's state machine. If no safe interception point exists on Paper 1.20.1, the honest standalone option is a small version-specific NMS adapter with explicit compatibility checks—not pretending a Bukkit join listener can authenticate a premium client before join.
+
+Reference: mappings.dev, Minecraft 1.20.1 `ServerLoginPacketListenerImpl` field/method map.
