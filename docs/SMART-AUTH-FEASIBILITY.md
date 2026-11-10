@@ -67,11 +67,17 @@ Implemented today:
 - Informational Mojang profile lookup.
 - In online-mode, automatic authentication based on the server's own successful vanilla session verification.
 
-Not implemented yet:
+Implemented as an isolated building block in the current feature branch:
+- `MinecraftSessionService` calculates the Minecraft signed SHA-1 server hash from the negotiated shared secret and server public key.
+- It calls the official session service `hasJoined` asynchronously, validates the returned profile name, and returns the verified UUID. Invalid sessions return no profile; service/transport errors complete exceptionally so callers can fail closed.
+
+Still not implemented:
 - Selective pre-join premium challenge in offline-mode.
-- Session-service `hasJoined` verification for that selective challenge.
-- Applying the verified premium UUID before Bukkit player creation.
+- Decrypting and validating the protocol Encryption Response in a login-layer adapter.
+- Calling `MinecraftSessionService` from that adapter and applying the verified premium UUID before Bukkit player creation.
 - Automatic premium registration in mixed mode.
+
+`MinecraftSessionService` is not wired into the plugin yet and must not be treated as an authentication bypass. The protocol adapter remains the blocking component.
 
 The current `PremiumChecker` is informational only. It must not be used to bypass local authentication in offline-mode.
 
