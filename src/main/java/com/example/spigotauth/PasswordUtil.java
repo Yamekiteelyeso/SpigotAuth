@@ -9,18 +9,18 @@ import java.util.Base64;
 
 public final class PasswordUtil {
 
-    private static final int ITERATIONS = 120_000;
+    private static final int ITERATIONS = 210_000;
     private static final int KEY_BITS = 256;
     private static final int SALT_BYTES = 16;
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private PasswordUtil() {}
 
-    /** Formato guardado: iteraciones$salt$hash */
+    /** Formato persistido: iteraciones$salt$hash. */
     public static String hash(String password) {
         byte[] salt = new byte[SALT_BYTES];
         RANDOM.nextBytes(salt);
-        byte[] key = pbkdf2(password, salt, ITERATIONS);
+        byte[] key = derive(password, salt, ITERATIONS);
         return ITERATIONS + "$" + Base64.getEncoder().encodeToString(salt)
                 + "$" + Base64.getEncoder().encodeToString(key);
     }
@@ -29,23 +29,30 @@ public final class PasswordUtil {
         try {
             String[] parts = stored.split("\\$");
             if (parts.length != 3) return false;
+
             int iterations = Integer.parseInt(parts[0]);
+            if (iterations < 10_000 || iterations > 1_000_000) return false;
+
             byte[] salt = Base64.getDecoder().decode(parts[1]);
             byte[] expected = Base64.getDecoder().decode(parts[2]);
-            byte[] actual = pbkdf2(password, salt, iterations);
+            if (salt.length < 16 || expected.length != KEY_BITS / 8) return false;
+
+            byte[] actual = derive(password, salt, iterations);
             return MessageDigest.isEqual(expected, actual);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException exception) {
             return false;
         }
     }
 
-    private static byte[] pbkdf2(String password, byte[] salt, int iterations) {
+    private static byte[] derive(String password, byte[] salt, int iterations) {
+        PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, iterations, KEY_BITS);
         try {
-            PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, iterations, KEY_BITS);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
             return factory.generateSecret(spec).getEncoded();
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("No se pudo calcular el hash", e);
+        } catch (GeneralSecurityException exception) {
+            throw new IllegalStateException("No se pudo calcular el hash de la contraseña.", exception);
+        } finally {
+            spec.clearPassword();
         }
     }
 }
