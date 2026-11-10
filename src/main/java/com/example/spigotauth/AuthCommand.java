@@ -6,7 +6,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
-public class AuthCommand implements CommandExecutor {
+public final class AuthCommand implements CommandExecutor {
 
     private final SpigotAuth plugin;
 
@@ -15,65 +15,78 @@ public class AuthCommand implements CommandExecutor {
     }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-        if (!(sender instanceof Player p)) {
-            sender.sendMessage("Solo jugadores pueden usar este comando.");
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ChatColor.RED + "Este comando solo puede utilizarse dentro del juego.");
             return true;
         }
 
         AuthManager auth = plugin.getAuth();
         AccountStore accounts = plugin.getAccounts();
-        String name = p.getName();
+        String name = player.getName();
 
-        if (auth.isLocked(name)) {
-            p.sendMessage(ChatColor.RED + "Tu cuenta está bloqueada temporalmente por intentos fallidos.");
+        if (auth.isAuthenticated(player)) {
+            player.sendMessage(ChatColor.GREEN + "✔ " + ChatColor.GRAY
+                    + "Tu sesión ya está iniciada.");
             return true;
         }
 
-        if (cmd.getName().equalsIgnoreCase("register")) {
-            if (auth.isAuthenticated(p)) {
-                p.sendMessage(ChatColor.YELLOW + "Ya has iniciado sesión.");
-                return true;
-            }
+        if (auth.isLocked(name)) {
+            player.sendMessage(ChatColor.RED + "✖ " + ChatColor.GRAY
+                    + "Has superado el número de intentos permitidos. Inténtalo más tarde.");
+            return true;
+        }
+
+        if (command.getName().equalsIgnoreCase("register")) {
             if (accounts.isRegistered(name)) {
-                p.sendMessage(ChatColor.YELLOW + "Ya tienes una cuenta. Usa /login <contraseña>.");
+                player.sendMessage(ChatColor.YELLOW + "Ya tienes una cuenta. "
+                        + "Utiliza " + ChatColor.AQUA + "/login <contraseña>");
                 return true;
             }
             if (args.length != 2) {
-                p.sendMessage(ChatColor.RED + "Uso: /register <contraseña> <confirmar>");
+                player.sendMessage(ChatColor.YELLOW + "Uso: "
+                        + ChatColor.WHITE + "/register <contraseña> <confirmar>");
                 return true;
             }
-            int min = plugin.getConfig().getInt("min-password-length", 6);
-            if (args[0].length() < min) {
-                p.sendMessage(ChatColor.RED + "La contraseña debe tener al menos " + min + " caracteres.");
+
+            int min = plugin.getConfig().getInt("min-password-length", 8);
+            int max = plugin.getConfig().getInt("max-password-length", 64);
+            if (args[0].length() < min || args[0].length() > max) {
+                player.sendMessage(ChatColor.RED + "La contraseña debe tener entre "
+                        + min + " y " + max + " caracteres.");
                 return true;
             }
             if (!args[0].equals(args[1])) {
-                p.sendMessage(ChatColor.RED + "Las contraseñas no coinciden.");
+                player.sendMessage(ChatColor.RED + "Las contraseñas no coinciden. Revísalas e inténtalo de nuevo.");
                 return true;
             }
-            accounts.register(name, args[0]);
-            auth.markAuthenticated(p);
+            if (!accounts.register(name, args[0])) {
+                player.sendMessage(ChatColor.RED + "No se pudo guardar tu cuenta. "
+                        + "Contacta a un administrador.");
+                return true;
+            }
+
+            auth.markAuthenticated(player);
+            player.sendMessage(ChatColor.GRAY + "Tu cuenta quedó registrada correctamente.");
             return true;
         }
 
-        if (cmd.getName().equalsIgnoreCase("login")) {
-            if (auth.isAuthenticated(p)) {
-                p.sendMessage(ChatColor.YELLOW + "Ya has iniciado sesión.");
-                return true;
-            }
+        if (command.getName().equalsIgnoreCase("login")) {
             if (!accounts.isRegistered(name)) {
-                p.sendMessage(ChatColor.YELLOW + "No tienes cuenta. Usa /register <contraseña> <confirmar>.");
+                player.sendMessage(ChatColor.YELLOW + "Todavía no tienes una cuenta. "
+                        + "Utiliza " + ChatColor.AQUA + "/register <contraseña> <confirmar>");
                 return true;
             }
             if (args.length != 1) {
-                p.sendMessage(ChatColor.RED + "Uso: /login <contraseña>");
+                player.sendMessage(ChatColor.YELLOW + "Uso: "
+                        + ChatColor.WHITE + "/login <contraseña>");
                 return true;
             }
             if (accounts.check(name, args[0])) {
-                auth.markAuthenticated(p);
+                auth.markAuthenticated(player);
+                player.sendMessage(ChatColor.GRAY + "¡Qué bueno tenerte de vuelta!");
             } else {
-                auth.registerFailure(p);
+                auth.registerFailure(player);
             }
             return true;
         }
