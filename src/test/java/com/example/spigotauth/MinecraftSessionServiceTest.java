@@ -2,7 +2,9 @@ package com.example.spigotauth;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
+import javax.crypto.spec.SecretKeySpec;
+import java.security.KeyPairGenerator;
+import java.time.Duration;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -25,7 +27,6 @@ class MinecraftSessionServiceTest {
                 MinecraftSessionService.parseVerifiedProfile(
                         "Notch",
                         "{\"id\":\"069a79f444e94726a5befca90e38aaf5\",\"name\":\"OtherPlayer\"}"));
-
         assertTrue(error.getCause() instanceof SecurityException);
     }
 
@@ -33,6 +34,12 @@ class MinecraftSessionServiceTest {
     void rejectsMalformedSessionResponse() {
         assertThrows(RuntimeException.class, () ->
                 MinecraftSessionService.parseVerifiedProfile("Notch", "{\"id\":\"bad\"}"));
+    }
+
+    @Test
+    void rejectsEmptySessionResponse() {
+        assertThrows(RuntimeException.class, () ->
+                MinecraftSessionService.parseVerifiedProfile("Notch", ""));
     }
 
     @Test
@@ -49,5 +56,31 @@ class MinecraftSessionServiceTest {
         var error = assertThrows(java.util.concurrent.CompletionException.class,
                 () -> service.hasJoined("Notch", "not-a-hash").join());
         assertTrue(error.getCause() instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void rejectsNonPositiveTimeout() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new MinecraftSessionService(Duration.ZERO));
+        assertThrows(IllegalArgumentException.class,
+                () -> new MinecraftSessionService(Duration.ofMillis(-1)));
+    }
+
+    @Test
+    void rejectsMalformedVerifiedProfileConstruction() {
+        assertThrows(NullPointerException.class,
+                () -> new MinecraftSessionService.VerifiedProfile(null, "Notch"));
+        assertThrows(IllegalArgumentException.class,
+                () -> new MinecraftSessionService.VerifiedProfile(UUID.randomUUID(), "bad name"));
+    }
+
+    @Test
+    void rejectsWrongSharedSecretLengthWhenCreatingServerHash() throws Exception {
+        var generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(1024);
+        var pair = generator.generateKeyPair();
+        var badSecret = new SecretKeySpec(new byte[8], "AES");
+        assertThrows(IllegalArgumentException.class,
+                () -> MinecraftSessionService.createServerHash("", badSecret, pair.getPublic()));
     }
 }
