@@ -1,5 +1,10 @@
-min-password-length: 6
+# Seguridad de cuentas
+min-password-length: 8
+max-password-length: 64
 max-attempts: 5
 lock-minutes: 5
 login-timeout-seconds: 60
+
+# Detección de perfiles Java en la API oficial de Mojang.
+# Se usa solo como información en servidores offline-mode.
 premium-cache-minutes: 10
