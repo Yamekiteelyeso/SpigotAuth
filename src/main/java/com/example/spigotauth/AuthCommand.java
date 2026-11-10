@@ -23,24 +23,33 @@ public final class AuthCommand implements CommandExecutor {
 
         AuthManager auth = plugin.getAuth();
         AccountStore accounts = plugin.getAccounts();
-        String name = player.getName();
+        String commandName = command.getName();
 
         if (auth.isAuthenticated(player)) {
-            player.sendMessage(ChatColor.GREEN + "✔ " + ChatColor.GRAY
-                    + "Tu sesión ya está iniciada.");
+            player.sendMessage(ChatColor.GREEN + "✔ " + ChatColor.GRAY + "Tu sesión ya está iniciada.");
             return true;
         }
 
+        if (commandName.equalsIgnoreCase("premiumlogin")) {
+            if (plugin.getServer().getOnlineMode()) {
+                player.sendMessage(ChatColor.GREEN + "El servidor ya verifica tu cuenta directamente con Minecraft.");
+                return true;
+            }
+            plugin.getPremiumOwnership().start(player);
+            return true;
+        }
+
+        String name = player.getName();
         if (auth.isLocked(name)) {
             player.sendMessage(ChatColor.RED + "✖ " + ChatColor.GRAY
                     + "Has superado el número de intentos permitidos. Inténtalo más tarde.");
             return true;
         }
 
-        if (command.getName().equalsIgnoreCase("register")) {
+        if (commandName.equalsIgnoreCase("register")) {
             if (accounts.isRegistered(name)) {
-                player.sendMessage(ChatColor.YELLOW + "Ya tienes una cuenta. "
-                        + "Utiliza " + ChatColor.AQUA + "/login <contraseña>");
+                player.sendMessage(ChatColor.YELLOW + "Ya tienes una cuenta. Utiliza "
+                        + ChatColor.AQUA + "/login <contraseña>");
                 return true;
             }
             if (args.length != 2) {
@@ -48,7 +57,6 @@ public final class AuthCommand implements CommandExecutor {
                         + ChatColor.WHITE + "/register <contraseña> <confirmar>");
                 return true;
             }
-
             int min = plugin.getConfig().getInt("min-password-length", 8);
             int max = plugin.getConfig().getInt("max-password-length", 64);
             if (args[0].length() < min || args[0].length() > max) {
@@ -61,20 +69,18 @@ public final class AuthCommand implements CommandExecutor {
                 return true;
             }
             if (!accounts.register(name, args[0])) {
-                player.sendMessage(ChatColor.RED + "No se pudo guardar tu cuenta. "
-                        + "Contacta a un administrador.");
+                player.sendMessage(ChatColor.RED + "No se pudo guardar tu cuenta. Contacta a un administrador.");
                 return true;
             }
-
             auth.markAuthenticated(player);
             player.sendMessage(ChatColor.GRAY + "Tu cuenta quedó registrada correctamente.");
             return true;
         }
 
-        if (command.getName().equalsIgnoreCase("login")) {
+        if (commandName.equalsIgnoreCase("login")) {
             if (!accounts.isRegistered(name)) {
-                player.sendMessage(ChatColor.YELLOW + "Todavía no tienes una cuenta. "
-                        + "Utiliza " + ChatColor.AQUA + "/register <contraseña> <confirmar>");
+                player.sendMessage(ChatColor.YELLOW + "Todavía no tienes una cuenta. Utiliza "
+                        + ChatColor.AQUA + "/register <contraseña> <confirmar>");
                 return true;
             }
             if (args.length != 1) {
@@ -90,7 +96,6 @@ public final class AuthCommand implements CommandExecutor {
             }
             return true;
         }
-
         return false;
     }
 }
