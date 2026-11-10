@@ -78,7 +78,7 @@ public final class PremiumOwnershipVerifier {
 
     private void verify(Player player, UUID sessionId, String clientId) throws Exception {
         JsonObject device = postForm(DEVICE_ENDPOINT,
-                "client_id=" + enc(clientId) + "&scope=" + enc("XboxLive.signin"));
+                "client_id=" + enc(clientId) + "&scope=" + enc("XboxLive.signin offline_access"));
         String deviceCode = required(device, "device_code");
         String userCode = required(device, "user_code");
         String verificationUri = device.has("verification_uri")
@@ -184,7 +184,7 @@ public final class PremiumOwnershipVerifier {
                 .header("Accept", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
-        return parse(send(request));
+        return parse(sendOAuthForm(request));
     }
 
     private static JsonObject postJson(String url, String body) throws IOException, InterruptedException {
@@ -204,6 +204,17 @@ public final class PremiumOwnershipVerifier {
                 .header("Accept", "application/json")
                 .GET().build();
         return parse(send(request));
+    }
+
+    // Microsoft responde HTTP 400 con authorization_pending durante el device flow.
+    // Es una respuesta de protocolo esperada, no un fallo de red.
+    private static String sendOAuthForm(HttpRequest request) throws IOException, InterruptedException {
+        HttpResponse<String> response = HTTP.send(request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        if (response.statusCode() < 200 || response.statusCode() >= 500) {
+            throw new IOException("OAuth HTTP " + response.statusCode());
+        }
+        return response.body();
     }
 
     private static String send(HttpRequest request) throws IOException, InterruptedException {
