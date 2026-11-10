@@ -75,7 +75,7 @@ Still not implemented:
 - Selective pre-join premium challenge in offline-mode.
 - Decrypting and validating the protocol Encryption Response in a login-layer adapter.
 - Calling `MinecraftSessionService` from that adapter and applying the verified premium UUID before Bukkit player creation.
-- Automatic premium registration in mixed mode.
+- Integration of `PremiumAuthService` into the pre-join adapter so it can only receive a session-verified profile.
 
 `MinecraftSessionService` is not wired into the plugin yet and must not be treated as an authentication bypass. The protocol adapter remains the blocking component.
 
