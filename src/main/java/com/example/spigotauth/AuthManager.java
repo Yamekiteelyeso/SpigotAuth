@@ -38,12 +38,15 @@ public final class AuthManager {
         authenticated.remove(id);
         failures.remove(id);
         cancelTimeout(id);
-        plugin.getPreAuthGuard().forget(player);
+        plugin.getPreAuthGuard().deactivate(player);
     }
 
     public void shutdown() {
         timeoutTasks.values().forEach(BukkitTask::cancel);
         timeoutTasks.clear();
+        for (Player player : plugin.getServer().getOnlinePlayers()) {
+            plugin.getPreAuthGuard().deactivate(player);
+        }
         authenticated.clear();
         failures.clear();
     }
