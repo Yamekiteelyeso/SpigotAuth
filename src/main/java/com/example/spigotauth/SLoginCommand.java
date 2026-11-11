@@ -22,8 +22,7 @@ public final class SLoginCommand implements CommandExecutor {
         }
 
         if (args.length == 1 && args[0].equalsIgnoreCase("reload")) {
-            plugin.reloadConfig();
-            plugin.getPremium().clearCache();
+            plugin.reloadSLoginConfiguration();
             plugin.getMessages().send(sender, "admin.reload-ok",
                     Map.of("language", plugin.getMessages().language()));
             return true;
