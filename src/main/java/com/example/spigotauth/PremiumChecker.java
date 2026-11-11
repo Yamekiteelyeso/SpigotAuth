@@ -34,7 +34,7 @@ public final class PremiumChecker {
     };
 
     private final SpigotAuth plugin;
-    private final long cacheMillis;
+    private volatile long cacheMillis;
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
 
     public PremiumChecker(SpigotAuth plugin, long cacheMillis) {
@@ -43,6 +43,11 @@ public final class PremiumChecker {
     }
 
     public void clearCache() {
+        cache.clear();
+    }
+
+    public void setCacheMillis(long cacheMillis) {
+        this.cacheMillis = Math.max(0L, cacheMillis);
         cache.clear();
     }
 
