@@ -25,7 +25,7 @@ public final class PremiumChecker {
     private record CacheEntry(Result result, long expiresAt) {}
 
     private static final Pattern PROFILE_ID =
-            Pattern.compile("\\\"id\\\"\\\\s*:\\\\s*\\\"([0-9a-fA-F]{32})\\\"");
+            Pattern.compile("\"id\"\\s*:\\s*\"([0-9a-fA-F]{32})\"");
     private static final Pattern VALID_NAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
 
     private static final String[] LOOKUP_ENDPOINTS = {
