@@ -163,6 +163,12 @@ public final class Paper1201SmartAuthAdapter {
                 return;
             }
 
+            if (!plugin.getConfig().getBoolean(
+                    "smart-auth.challenge-if-premium-nickname", true)) {
+                continueOffline(ctx, originalPacket);
+                return;
+            }
+
             plugin.getPremium().check(hello.name(), result ->
                     ctx.channel().eventLoop().execute(() -> decideLookup(
                             ctx, originalPacket, hello, result)));
