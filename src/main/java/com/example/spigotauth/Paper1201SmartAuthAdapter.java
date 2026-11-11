@@ -17,6 +17,7 @@ import org.bukkit.craftbukkit.v1_20_R1.CraftServer;
 
 import javax.crypto.SecretKey;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.security.KeyPair;
 import java.util.Locale;
 import java.util.Map;
@@ -222,11 +223,17 @@ public final class Paper1201SmartAuthAdapter {
             Field stateField = findStateField();
             Field profileField = findField(ServerLoginPacketListenerImpl.class, GameProfile.class);
             Field challengeField = findField(ServerLoginPacketListenerImpl.class, byte[].class);
-            Field serverIdField = findField(ServerLoginPacketListenerImpl.class, String.class);
+            Field serverIdField = findFinalStringField(ServerLoginPacketListenerImpl.class);
+            Field requestedUsernameField = findMutableStringField(
+                    ServerLoginPacketListenerImpl.class);
 
             byte[] challenge = ((byte[]) challengeField.get(login)).clone();
             String serverId = (String) serverIdField.get(login);
+            if (serverId == null) serverId = "";
 
+            if (requestedUsernameField != null) {
+                requestedUsernameField.set(login, hello.name());
+            }
             profileField.set(login, new GameProfile(expectedUuid, hello.name()));
             stateField.set(login, enumConstant(stateField.getType(), "KEY"));
 
@@ -368,12 +375,38 @@ public final class Paper1201SmartAuthAdapter {
 
     private static Field findField(Class<?> owner, Class<?> type) throws NoSuchFieldException {
         for (Field field : owner.getDeclaredFields()) {
-            if (field.getType() == type) {
+            if (field.getType() == type && !Modifier.isStatic(field.getModifiers())) {
                 field.setAccessible(true);
                 return field;
             }
         }
         throw new NoSuchFieldException(type.getName());
+    }
+
+    private static Field findFinalStringField(Class<?> owner) throws NoSuchFieldException {
+        for (Field field : owner.getDeclaredFields()) {
+            int modifiers = field.getModifiers();
+            if (field.getType() == String.class
+                    && !Modifier.isStatic(modifiers)
+                    && Modifier.isFinal(modifiers)) {
+                field.setAccessible(true);
+                return field;
+            }
+        }
+        throw new NoSuchFieldException("final String serverId");
+    }
+
+    private static Field findMutableStringField(Class<?> owner) {
+        for (Field field : owner.getDeclaredFields()) {
+            int modifiers = field.getModifiers();
+            if (field.getType() == String.class
+                    && !Modifier.isStatic(modifiers)
+                    && !Modifier.isFinal(modifiers)) {
+                field.setAccessible(true);
+                return field;
+            }
+        }
+        return null;
     }
 
     private static Object enumConstant(Class<?> type, String name) {
