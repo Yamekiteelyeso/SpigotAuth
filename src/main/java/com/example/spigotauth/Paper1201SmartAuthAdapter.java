@@ -504,11 +504,18 @@ public final class Paper1201SmartAuthAdapter {
             // can repeatedly connect with the victim's name and cancel their
             // /premium request. Only a verified join or an authenticated
             // admin cancellation may change the stored migration.
+            Throwable root = unwrap(failure);
             logger.log(Level.WARNING,
                     "SLogin no pudo verificar la sesión Premium de " + name,
-                    unwrap(failure));
+                    root);
 
-            disconnect("premium.verification-start-error");
+            if (isNetworkOrTimeoutFailure(root)) {
+                disconnect("premium.verification-unavailable");
+            } else if (root instanceof SecurityException) {
+                disconnect("premium.verification-invalid");
+            } else {
+                disconnect("premium.verification-start-error");
+            }
         }
 
         private void disconnect(String messagePath) {
@@ -542,6 +549,21 @@ public final class Paper1201SmartAuthAdapter {
             return inet.getAddress();
         }
         return null;
+    }
+
+    static boolean isNetworkOrTimeoutFailure(Throwable failure) {
+        Throwable current = failure;
+        for (int depth = 0; current != null && depth < 12; depth++) {
+            if (current instanceof java.util.concurrent.TimeoutException
+                    || current instanceof java.net.SocketTimeoutException
+                    || current instanceof java.net.ConnectException
+                    || current instanceof java.net.UnknownHostException
+                    || current instanceof java.io.IOException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private static Throwable unwrap(Throwable throwable) {
