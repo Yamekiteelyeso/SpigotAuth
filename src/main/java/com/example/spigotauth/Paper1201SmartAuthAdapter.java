@@ -16,10 +16,14 @@ import net.minecraft.server.network.ServerLoginPacketListenerImpl;
 import org.bukkit.craftbukkit.v1_20_R1.CraftServer;
 
 import javax.crypto.SecretKey;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.security.KeyPair;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -44,6 +48,7 @@ public final class Paper1201SmartAuthAdapter {
 
     private volatile boolean enabled;
     private Paper1201LoginAccess loginAccess;
+    private VanillaSessionVerifier sessionVerifier;
 
     public Paper1201SmartAuthAdapter(SpigotAuth plugin) {
         this.plugin = plugin;
@@ -71,6 +76,11 @@ public final class Paper1201SmartAuthAdapter {
             // encryption primitive expected by the 1.20.1 adapter.
             Connection.class.getDeclaredMethod("setupEncryption", SecretKey.class);
 
+            MinecraftServer minecraftServer =
+                    ((CraftServer) plugin.getServer()).getServer();
+            sessionVerifier = new VanillaSessionVerifier(
+                    minecraftServer.getSessionService());
+
             enabled = true;
             ChannelInitializeListenerHolder.addListener(INITIALIZER_KEY, this::install);
 
@@ -80,6 +90,10 @@ public final class Paper1201SmartAuthAdapter {
         } catch (Throwable failure) {
             enabled = false;
             loginAccess = null;
+            if (sessionVerifier != null) {
+                sessionVerifier.close();
+                sessionVerifier = null;
+            }
             logger.log(Level.SEVERE,
                     "SLogin desactivó Smart Auth: esta build de Paper 1.20.1 "
                             + "no coincide con el adaptador validado.",
@@ -91,6 +105,11 @@ public final class Paper1201SmartAuthAdapter {
     public void disable() {
         enabled = false;
         premiumTickets.clear();
+
+        if (sessionVerifier != null) {
+            sessionVerifier.close();
+            sessionVerifier = null;
+        }
 
         try {
             ChannelInitializeListenerHolder.removeListener(INITIALIZER_KEY);
@@ -341,10 +360,19 @@ public final class Paper1201SmartAuthAdapter {
                 // hasJoined.
                 connection.setupEncryption(sharedSecret);
 
-                debug("Consultando hasJoined para " + attempt.name());
+                InetAddress remoteAddress = remoteAddress(connection);
+                long timeoutMs = Math.max(
+                        1000L,
+                        plugin.getConfig().getLong(
+                                "smart-auth.session-timeout-ms", 5000L)
+                );
 
-                plugin.getSessionService()
-                        .hasJoined(attempt.name(), serverHash)
+                debug("Consultando Authlib hasJoinedServer para "
+                        + attempt.name());
+
+                sessionVerifier
+                        .hasJoined(attempt.name(), serverHash, remoteAddress)
+                        .orTimeout(timeoutMs, TimeUnit.MILLISECONDS)
                         .whenComplete((profile, error) ->
                                 channel.eventLoop().execute(() ->
                                         finishPremiumVerification(
@@ -359,7 +387,7 @@ public final class Paper1201SmartAuthAdapter {
 
         private void finishPremiumVerification(
                 PremiumAttempt attempt,
-                MinecraftSessionService.VerifiedProfile verified,
+                GameProfile verified,
                 Throwable error) {
             if (!channel.isActive()) return;
 
@@ -375,8 +403,10 @@ public final class Paper1201SmartAuthAdapter {
             }
 
             if (verified == null
-                    || !verified.uuid().equals(attempt.expectedUuid())
-                    || !verified.name().equalsIgnoreCase(attempt.name())) {
+                    || verified.getId() == null
+                    || verified.getName() == null
+                    || !verified.getId().equals(attempt.expectedUuid())
+                    || !verified.getName().equalsIgnoreCase(attempt.name())) {
                 failPremium(
                         attempt.name(),
                         new SecurityException(
@@ -385,33 +415,32 @@ public final class Paper1201SmartAuthAdapter {
                 return;
             }
 
-            GameProfile profile =
-                    new GameProfile(verified.uuid(), verified.name());
-
             // Keep the remainder of the login on the server thread and let
             // Paper's own 1.20.1 method perform its VERIFYING transition.
+            // The Authlib GameProfile is passed through intact, including
+            // properties such as signed textures.
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 if (!channel.isActive()) return;
 
                 try {
                     loginAccess.startClientVerification(
                             attempt.login(),
-                            profile
+                            verified
                     );
 
                     premiumTickets.put(
-                            verified.uuid(),
+                            verified.getId(),
                             new PremiumTicket(
-                                    verified.name(),
+                                    verified.getName(),
                                     System.currentTimeMillis()
                                             + VERIFIED_TICKET_TTL_MS
                             )
                     );
 
-                    debug("hasJoined confirmó " + verified.name()
-                            + " (" + verified.uuid() + ")");
+                    debug("hasJoined confirmó " + verified.getName()
+                            + " (" + verified.getId() + ")");
                     logger.info("SLogin verificó Premium: "
-                            + verified.name() + " (" + verified.uuid() + ")");
+                            + verified.getName() + " (" + verified.getId() + ")");
 
                     channel.eventLoop().execute(() -> resume(channel));
                 } catch (Throwable failure) {
@@ -459,6 +488,14 @@ public final class Paper1201SmartAuthAdapter {
         if (channel == null || !channel.isActive()) return;
         channel.config().setAutoRead(true);
         channel.read();
+    }
+
+    private static InetAddress remoteAddress(Connection connection) {
+        SocketAddress remote = connection.getRemoteAddress();
+        if (remote instanceof InetSocketAddress inet) {
+            return inet.getAddress();
+        }
+        return null;
     }
 
     private static Throwable unwrap(Throwable throwable) {
