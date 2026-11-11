@@ -338,6 +338,15 @@ public final class Paper1201SmartAuthAdapter {
         }
 
         private void failPremium(String name, Throwable failure) {
+            // A /premium migration is only pending until a real Mojang session
+            // proves ownership. If that challenge fails, roll the pending flag
+            // back so the registered local account is not permanently locked out.
+            if (plugin.getPremiumPreferences().expectedUuid(name) != null
+                    && !plugin.getPremiumPreferences().isVerified(name)) {
+                plugin.getPremiumPreferences().clear(name);
+                debug("Migración Premium pendiente revertida para " + name);
+            }
+
             logger.log(Level.WARNING,
                     "SLogin no pudo verificar la sesión Premium de " + name, failure);
             disconnect("premium.verification-start-error");
