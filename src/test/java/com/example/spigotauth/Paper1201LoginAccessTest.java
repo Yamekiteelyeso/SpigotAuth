@@ -34,12 +34,13 @@ class Paper1201LoginAccessTest {
         assertTrue(access.supportsState("HELLO"));
         assertTrue(access.supportsState("KEY"));
         assertTrue(access.supportsState("AUTHENTICATING"));
-        assertTrue(access.supportsState("VERIFYING"));
+        assertTrue(access.supportsState("READY_TO_ACCEPT"));
 
         Set<String> states = access.stateNames();
-        assertTrue(states.contains("WAITING_FOR_DUPE_DISCONNECT"));
-        assertTrue(states.contains("PROTOCOL_SWITCHING"));
+        assertTrue(states.contains("DELAY_ACCEPT"));
         assertTrue(states.contains("ACCEPTED"));
+        assertFalse(states.contains("VERIFYING"));
+        assertFalse(states.contains("PROTOCOL_SWITCHING"));
     }
 
     @Test
