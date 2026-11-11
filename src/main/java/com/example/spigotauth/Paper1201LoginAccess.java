@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
  * Validated access to the real Minecraft/Paper 1.20.1 login layout.
  *
  * 1.20.1 uses the legacy login state machine:
- * HELLO -> KEY -> AUTHENTICATING -> VERIFYING -> (optional duplicate wait) -> ACCEPTED.
+ * HELLO -> KEY -> AUTHENTICATING -> READY_TO_ACCEPT -> DELAY_ACCEPT -> ACCEPTED.
  */
 final class Paper1201LoginAccess {
 
@@ -21,8 +21,8 @@ final class Paper1201LoginAccess {
             "HELLO",
             "KEY",
             "AUTHENTICATING",
-            "VERIFYING",
-            "WAITING_FOR_DUPE_DISCONNECT",
+            "READY_TO_ACCEPT",
+            "DELAY_ACCEPT",
             "ACCEPTED"
     );
 
@@ -124,7 +124,7 @@ final class Paper1201LoginAccess {
                        GameProfile verifiedProfile)
             throws ReflectiveOperationException {
         gameProfile.set(login, verifiedProfile);
-        setState(login, "VERIFYING");
+        setState(login, "READY_TO_ACCEPT");
     }
 
     boolean supportsState(String stateName) {
