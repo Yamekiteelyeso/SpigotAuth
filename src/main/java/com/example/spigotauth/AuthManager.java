@@ -33,6 +33,9 @@ public final class AuthManager {
         locked.remove(lockKey(player));
         cancelTimeout(id);
         plugin.getPreAuthGuard().deactivate(player);
+        if (plugin.getConfig().getBoolean("teleports.after-auth-to-loginready", true)) {
+            plugin.getLoginLocations().teleport(player, LoginLocationStore.Spot.LOGINREADY);
+        }
     }
 
     public void clear(Player player) {
