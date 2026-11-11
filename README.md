@@ -4,7 +4,7 @@ Standalone authentication plugin for Minecraft Java, **Paper 1.20.1 / Java 17**,
 
 ## Installation
 
-1. Use the CI-built SLogin-1.8.0.jar production build, not the dev JAR.
+1. Use the CI-built SLogin-1.8.1.jar production build, not the dev JAR.
 2. Remove other conflicting login plugins. Install on Paper 1.20.1 and Java 17.
 3. Restart, edit plugins/SLogin/config.yml and run /slogin status.
 4. With online-mode=false and smart-auth.enabled=true, Smart Auth should say ACTIVE.
@@ -32,6 +32,8 @@ IMPORTANT: A public nickname lookup is not proof of identity. Premium autologin 
 | /slogin loginready tp | Teleport to location |
 | /slogin spawnlogin delete | Delete location |
 | /slogin loginready delete | Delete location |
+| /slogin premiumcancel player | Cancel a pending Premium migration (admin only; never changes verified Premium accounts) |
+| /slogin premiumcheck player | Diagnose public Minecraft profile lookup (not authentication) |
 
 Location actions: set/edit/editar, delete/remove/clear/borrar, show/info/ver, tp/teleport.
 A player with slogin.admin (OP by default) must be standing on a block to save a location; the saved point centers X and Z, preserves standing height and view direction, and includes the world. Both points are independently saved in plugins/SLogin/locations.yml. If unset, automatic teleports are skipped. Console can show/delete locations but cannot set/teleport.
@@ -72,3 +74,13 @@ After a local /login or /register or successful verified Premium join, players a
 ## Testing and limitations
 
 CI verifies Java build, unit tests, command metadata and Paper 1.20.1 offline-mode boot/protocol smoke tests. It can validate that an Encryption Request is sent, but NOT a real Microsoft/Minecraft account's entire verified session. Test that final step on an actual client and inspect logs/latest.log with smart-auth.debug enabled. SLogin NMS logic is specific to Paper 1.20.1 (protocol 763), not a claim of support for arbitrary Spigot/Paper versions.
+
+## Reliability notice
+
+A failed Mojang challenge must **never** automatically cancel an owner's pending /premium migration, because another client can use the same username to force a failed challenge. An admin may clear a stuck pending migration with /slogin premiumcancel <player>, and the existing local password is retained. Verified Premium account mappings are not downgraded by that command.
+
+An empty equipment slot must not trigger an exception during pre-auth cleanup; tests cover this. These are regression fixes, not proof of complete Premium Microsoft authentication on a real client.
+
+## Premium connection troubleshooting
+
+Run `/slogin status` to ensure Smart Auth is active on Paper 1.20.1, then `/slogin premiumcheck <name>` to diagnose whether Mojang's public profile service is reachable. A positive profile lookup is NOT proof of ownership; the client's session must pass Minecraft's encrypted challenge plus `hasJoinedServer`. The connection now reports a distinct message for invalid official sessions versus Mojang/network outages. A `/slogin reload` closes only connections still in the authentication handshake, not already logged-in players.

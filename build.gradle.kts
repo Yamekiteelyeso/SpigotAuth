@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.example"
-version = "1.8.0"
+version = "1.8.1"
 
 repositories {
     mavenCentral()
@@ -26,7 +26,7 @@ tasks.test {
 
 tasks.jar {
     archiveBaseName.set("SLogin")
-    archiveVersion.set("1.8.0")
+    archiveVersion.set("1.8.1")
 }
 
 tasks.assemble {

@@ -45,6 +45,7 @@ public final class Paper1201SmartAuthAdapter {
     private final SpigotAuth plugin;
     private final Logger logger;
     private final Map<UUID, PremiumTicket> premiumTickets = new ConcurrentHashMap<>();
+    private final java.util.Set<Channel> activeChannels = ConcurrentHashMap.newKeySet();
 
     private volatile boolean enabled;
     private Paper1201LoginAccess loginAccess;
@@ -110,6 +111,16 @@ public final class Paper1201SmartAuthAdapter {
         enabled = false;
         premiumTickets.clear();
 
+        // During /slogin reload or plugin shutdown, an in-flight Premium
+        // lookup may have disabled autoRead. Close only channels currently
+        // owned by this adapter; otherwise they could hang indefinitely.
+        for (Channel pending : activeChannels) {
+            pending.eventLoop().execute(() -> {
+                if (pending.isActive()) pending.close();
+            });
+        }
+        activeChannels.clear();
+
         if (sessionVerifier != null) {
             sessionVerifier.close();
             sessionVerifier = null;
@@ -141,6 +152,8 @@ public final class Paper1201SmartAuthAdapter {
             try {
                 if (!enabled || !channel.isActive()) return;
                 if (channel.pipeline().get(HANDLER_NAME) != null) return;
+
+                channel.closeFuture().addListener(done -> activeChannels.remove(channel));
 
                 debug("Inicializando canal de login " + channel.id());
 
@@ -201,6 +214,7 @@ public final class Paper1201SmartAuthAdapter {
         private void handleHello(ChannelHandlerContext ctx,
                                  Object originalPacket,
                                  ServerboundHelloPacket hello) {
+            activeChannels.add(channel);
             pause(channel);
 
             String name = hello.name();
@@ -282,6 +296,7 @@ public final class Paper1201SmartAuthAdapter {
 
         private void continueOffline(ChannelHandlerContext ctx, Object originalPacket) {
             premiumAttempt = null;
+            activeChannels.remove(channel);
             ctx.fireChannelRead(originalPacket);
             resume(channel);
         }
@@ -472,7 +487,10 @@ public final class Paper1201SmartAuthAdapter {
                     logger.info("SLogin verificó Premium: "
                             + verified.getName() + " (" + verified.getId() + ")");
 
-                    channel.eventLoop().execute(() -> resume(channel));
+                    channel.eventLoop().execute(() -> {
+                        activeChannels.remove(channel);
+                        resume(channel);
+                    });
                 } catch (Throwable failure) {
                     channel.eventLoop().execute(() ->
                             failPremium(attempt.name(), failure));
@@ -481,16 +499,23 @@ public final class Paper1201SmartAuthAdapter {
         }
 
         private void failPremium(String name, Throwable failure) {
-            if (name != null && plugin.getPremiumPreferences().isPending(name)) {
-                plugin.getPremiumPreferences().clear(name);
-                debug("Migración Premium pendiente revertida para " + name);
-            }
-
+            // Never erase the owner's pending migration because a remote
+            // connection failed its challenge. Otherwise a cracked client
+            // can repeatedly connect with the victim's name and cancel their
+            // /premium request. Only a verified join or an authenticated
+            // admin cancellation may change the stored migration.
+            Throwable root = unwrap(failure);
             logger.log(Level.WARNING,
                     "SLogin no pudo verificar la sesión Premium de " + name,
-                    unwrap(failure));
+                    root);
 
-            disconnect("premium.verification-start-error");
+            if (isNetworkOrTimeoutFailure(root)) {
+                disconnect("premium.verification-unavailable");
+            } else if (root instanceof SecurityException) {
+                disconnect("premium.verification-invalid");
+            } else {
+                disconnect("premium.verification-start-error");
+            }
         }
 
         private void disconnect(String messagePath) {
@@ -524,6 +549,21 @@ public final class Paper1201SmartAuthAdapter {
             return inet.getAddress();
         }
         return null;
+    }
+
+    static boolean isNetworkOrTimeoutFailure(Throwable failure) {
+        Throwable current = failure;
+        for (int depth = 0; current != null && depth < 12; depth++) {
+            if (current instanceof java.util.concurrent.TimeoutException
+                    || current instanceof java.net.SocketTimeoutException
+                    || current instanceof java.net.ConnectException
+                    || current instanceof java.net.UnknownHostException
+                    || current instanceof java.io.IOException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private static Throwable unwrap(Throwable throwable) {
