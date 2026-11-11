@@ -5,6 +5,7 @@ import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.util.Vector;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -37,7 +38,9 @@ public final class PreAuthGuard {
                 player.isCollidable(),
                 player.getCanPickupItems(),
                 player.getAllowFlight(),
-                player.isFlying()
+                player.isFlying(),
+                player.isGlowing(),
+                player.isSilent()
         ));
 
         player.setGameMode(GameMode.SURVIVAL);
@@ -45,8 +48,13 @@ public final class PreAuthGuard {
         player.setInvulnerable(true);
         player.setCollidable(false);
         player.setCanPickupItems(false);
+        player.setGlowing(false);
+        player.setSilent(true);
+        if (player.isInsideVehicle()) player.leaveVehicle();
         if (player.isFlying()) player.setFlying(false);
         player.setAllowFlight(false);
+        player.setVelocity(new Vector(0, 0, 0));
+        player.setFallDistance(0.0F);
 
         maskEquipment(player);
     }
@@ -59,6 +67,8 @@ public final class PreAuthGuard {
         player.setInvulnerable(snapshot.invulnerable());
         player.setCollidable(snapshot.collidable());
         player.setCanPickupItems(snapshot.canPickupItems());
+        player.setGlowing(snapshot.glowing());
+        player.setSilent(snapshot.silent());
         player.setGameMode(snapshot.gameMode());
         player.setAllowFlight(snapshot.allowFlight());
         if (snapshot.allowFlight()) player.setFlying(snapshot.flying());
@@ -124,6 +134,8 @@ public final class PreAuthGuard {
             boolean collidable,
             boolean canPickupItems,
             boolean allowFlight,
-            boolean flying
+            boolean flying,
+            boolean glowing,
+            boolean silent
     ) {}
 }
