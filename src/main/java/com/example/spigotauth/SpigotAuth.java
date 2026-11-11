@@ -3,6 +3,7 @@ package com.example.spigotauth;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.time.Duration;
 
 public final class SpigotAuth extends JavaPlugin {
 
@@ -11,6 +12,7 @@ public final class SpigotAuth extends JavaPlugin {
     private AuthManager auth;
     private PremiumAccountStore premiumAccounts;
     private PremiumAuthService premiumAuth;
+    private MinecraftSessionService sessionService;
 
     @Override
     public void onEnable() {
@@ -23,6 +25,9 @@ public final class SpigotAuth extends JavaPlugin {
         premiumAccounts = new PremiumAccountStore(
                 new File(getDataFolder(), "premium-accounts.yml"), getLogger());
         premiumAuth = new PremiumAuthService(premiumAccounts, auth);
+        long sessionTimeoutMs = Math.max(1000L,
+                getConfig().getLong("smart-auth.session-timeout-ms", 5000L));
+        sessionService = new MinecraftSessionService(Duration.ofMillis(sessionTimeoutMs));
 
         getServer().getPluginManager().registerEvents(new AuthListener(this), this);
 
@@ -37,8 +42,15 @@ public final class SpigotAuth extends JavaPlugin {
 
         getLogger().info("SpigotAuth v1.1.0 activado correctamente.");
         if (!getServer().getOnlineMode()) {
-            getLogger().warning("El servidor usa offline-mode: la detección premium es informativa y no autentica propietarios.");
+            getLogger().warning("Servidor en offline-mode: las cuentas locales están protegidas, "
+                    + "pero Smart Authentication Premium seguirá desactivado hasta que el adaptador "
+                    + "pre-login de Paper 1.20.1 esté instalado y validado.");
         }
+    }
+
+    @Override
+    public void onDisable() {
+        if (auth != null) auth.shutdown();
     }
 
     public AccountStore getAccounts() {
@@ -59,5 +71,9 @@ public final class SpigotAuth extends JavaPlugin {
 
     public PremiumAuthService getPremiumAuth() {
         return premiumAuth;
+    }
+
+    public MinecraftSessionService getSessionService() {
+        return sessionService;
     }
 }
