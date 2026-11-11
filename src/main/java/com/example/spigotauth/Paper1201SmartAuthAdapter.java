@@ -108,7 +108,7 @@ public final class Paper1201SmartAuthAdapter {
                 channel.pipeline().addBefore(
                         "packet_handler",
                         HANDLER_NAME,
-                        new LoginStartInterceptor(connection)
+                        new LoginStartInterceptor(connection, channel)
                 );
             } catch (Throwable failure) {
                 logger.log(Level.WARNING, "SLogin no pudo inyectar una conexión nueva.", failure);
@@ -118,10 +118,12 @@ public final class Paper1201SmartAuthAdapter {
 
     private final class LoginStartInterceptor extends ChannelInboundHandlerAdapter {
         private final Connection connection;
+        private final Channel channel;
         private boolean decided;
 
-        private LoginStartInterceptor(Connection connection) {
+        private LoginStartInterceptor(Connection connection, Channel channel) {
             this.connection = connection;
+            this.channel = channel;
         }
 
         @Override
@@ -211,37 +213,11 @@ public final class Paper1201SmartAuthAdapter {
                     challenge
             ));
 
-            Channel channel = connectionChannel();
-            if (channel != null) resume(channel);
+            resume(channel);
         }
 
         private void disconnect(String messagePath) {
             connection.disconnect(Component.literal(plugin.getMessages().raw(messagePath)));
-        }
-
-        private Channel connectionChannel() {
-            ChannelHandlerContext context = connectionContext();
-            return context == null ? null : context.channel();
-        }
-
-        private ChannelHandlerContext connectionContext() {
-            // Connection itself is in the pipeline as packet_handler, so find
-            // its context without reflecting the private channel field.
-            for (String name : new String[]{"packet_handler"}) {
-                Channel channel = findPipelineChannel();
-                if (channel != null) return channel.pipeline().context(name);
-            }
-            return null;
-        }
-
-        private Channel findPipelineChannel() {
-            try {
-                Field field = Connection.class.getDeclaredField("channel");
-                field.setAccessible(true);
-                return (Channel) field.get(connection);
-            } catch (ReflectiveOperationException ignored) {
-                return null;
-            }
         }
     }
 
