@@ -98,6 +98,13 @@ public final class LoginLocationStore {
 
         String name = data.getString(path + ".world");
         if (name == null || name.isBlank()) return null;
+        for (String coordinate : new String[]{"x", "y", "z", "yaw", "pitch"}) {
+            if (!data.isNumber(path + "." + coordinate)) {
+                logger.warning("Ubicación incompleta o inválida en " + spot.key()
+                        + " (falta " + coordinate + ")");
+                return null;
+            }
+        }
 
         try {
             return new SavedLocation(
@@ -121,7 +128,7 @@ public final class LoginLocationStore {
         Location feet = player.getLocation();
         return new Location(feet.getWorld(),
                 feet.getBlockX() + 0.5,
-                feet.getBlockY(),
+                feet.getY(),
                 feet.getBlockZ() + 0.5,
                 feet.getYaw(), feet.getPitch());
     }
