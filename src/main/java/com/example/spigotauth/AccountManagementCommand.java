@@ -87,48 +87,38 @@ public final class AccountManagementCommand implements CommandExecutor {
             return true;
         }
 
-        UUID pending = plugin.getPremiumPreferences().expectedUuid(name);
-        if (pending != null && !plugin.getPremiumPreferences().isVerified(name)) {
-            plugin.getMessages().send(player, "premium.command-pending");
-            return true;
-        }
-
-        // /premium is a migration command for an existing LOCAL account.
-        // A fresh/unregistered player cannot use it as a shortcut around /register.
+        // /premium is available ONLY to players who previously registered
+        // and authenticated using their local password.
         if (!plugin.getAccounts().isRegistered(name)) {
             plugin.getMessages().send(player, "premium.command-register-first");
             return true;
         }
 
-        plugin.getMessages().send(player, "premium.command-checking");
+        if (plugin.getPremiumPreferences().isPending(name)) {
+            plugin.getMessages().send(player, "premium.command-pending");
+            return true;
+        }
 
-        plugin.getPremium().check(name, result -> {
-            if (!player.isOnline()) return;
+        Paper1201SmartAuthAdapter adapter = plugin.getSmartAuthAdapter();
+        if (plugin.getServer().getOnlineMode() || adapter == null || !adapter.isEnabled()) {
+            plugin.getMessages().send(player, "premium.command-disabled");
+            return true;
+        }
 
-            switch (result.status()) {
-                case NOT_FOUND -> plugin.getMessages().send(player, "premium.command-not-found");
-                case UNAVAILABLE -> plugin.getMessages().send(player, "premium.command-unavailable");
-                case PREMIUM -> {
-                    UUID expected = result.profileId();
-                    if (expected == null || !plugin.getPremiumPreferences().request(name, expected)) {
-                        plugin.getMessages().send(player, "premium.command-save-error");
-                        return;
-                    }
+        // A nickname lookup does not prove account ownership. It can also
+        // return false negatives during Mojang throttling/outages. The real
+        // proof happens at the next login via encrypted hasJoinedServer.
+        if (!plugin.getPremiumPreferences().requestUnresolved(name)) {
+            plugin.getMessages().send(player, "premium.command-save-error");
+            return true;
+        }
 
-                    plugin.getMessages().send(player, "premium.command-enabled");
-                    if (plugin.getConfig().getBoolean(
-                            "smart-auth.premium-command-reconnect", true)) {
-                        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                            if (player.isOnline()) {
-                                player.kickPlayer(plugin.getMessages().raw(
-                                        "premium.command-reconnect"));
-                            }
-                        }, 20L);
-                    }
-                }
-            }
-        });
+        plugin.getMessages().sendLines(player, "premium.command-ready",
+                java.util.Map.of("player", name));
 
+        // Ask the user to reconnect explicitly: surprise-kicking can look like
+        // /premium is broken. The local password remains stored until official
+        // session verification succeeds.
         return true;
     }
 }
