@@ -27,7 +27,7 @@ public final class SpigotAuth extends JavaPlugin {
         auth = new AuthManager(this);
         premiumAccounts = new PremiumAccountStore(
                 new File(getDataFolder(), "premium-accounts.yml"), getLogger());
-        premiumAuth = new PremiumAuthService(premiumAccounts, auth);
+        premiumAuth = new PremiumAuthService(this, premiumAccounts, auth);
         long sessionTimeoutMs = Math.max(1000L,
                 getConfig().getLong("smart-auth.session-timeout-ms", 5000L));
         sessionService = new MinecraftSessionService(Duration.ofMillis(sessionTimeoutMs));
