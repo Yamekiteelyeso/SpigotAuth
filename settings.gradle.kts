@@ -5,4 +5,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "SpigotAuth"
+rootProject.name = "SLogin"
