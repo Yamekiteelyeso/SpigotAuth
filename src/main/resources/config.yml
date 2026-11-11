@@ -23,10 +23,16 @@ smart-auth:
   debug: false
 
   # Paper 1.20.1 únicamente.
-  # Cuando un nombre corresponde a una cuenta Premium, SLogin inicia el
-  # challenge oficial de cifrado y deja que el login vanilla valide la sesión.
-  # Solo se omite /register y /login si el UUID final coincide con el UUID
-  # Premium esperado.
+  # Si está activo, un nick que exista como Premium puede recibir el challenge
+  # oficial incluso en su primer acceso, similar a nLogin Premium.
+  challenge-if-premium-nickname: true
+
+  # Después de /register o /login, avisa al dueño de una cuenta local cuando
+  # su nick también existe como Premium y le ofrece usar /premium.
+  premium-question: true
+
+  # SLogin solo omite /register y /login después de validar la sesión oficial
+  # y comprobar que UUID + nombre coinciden con el perfil esperado.
   session-timeout-ms: 5000
 
   # Si Mojang no responde:
@@ -52,7 +58,14 @@ messages:
       verification-unavailable: "&cNo se pudo verificar tu cuenta Premium ahora mismo. Inténtalo de nuevo."
       verification-start-error: "&cNo se pudo iniciar la verificación Premium."
       incompatible-login-state: "&cTu conexión llegó en un estado de login no compatible."
+      question:
+        - ""
+        - "&e¿Tu cuenta de Minecraft es Premium?"
+        - "&7Si quieres entrar automáticamente en futuros accesos, usa &f/premium&7."
+        - "&7Solo se activará después de verificar que realmente eres el dueño."
+        - ""
       command-usage: "{prefix}&eUso: &f/premium"
+      command-register-first: "{prefix}&cPrimero debes tener una cuenta local registrada y haber iniciado sesión."
       command-checking: "{prefix}&7Comprobando tu perfil Premium..."
       command-not-found: "{prefix}&cNo existe una cuenta Premium de Minecraft Java con tu nombre."
       command-unavailable: "{prefix}&cMojang no está disponible ahora mismo. Inténtalo más tarde."
@@ -118,7 +131,14 @@ messages:
       verification-unavailable: "&cYour Premium account could not be verified right now. Try again."
       verification-start-error: "&cPremium verification could not be started."
       incompatible-login-state: "&cYour connection reached an unsupported login state."
+      question:
+        - ""
+        - "&eIs your Minecraft account Premium?"
+        - "&7If you want automatic login on future joins, use &f/premium&7."
+        - "&7It will only activate after SLogin proves you own that account."
+        - ""
       command-usage: "{prefix}&eUsage: &f/premium"
+      command-register-first: "{prefix}&cYou must first have a registered local account and be logged in."
       command-checking: "{prefix}&7Checking your Premium profile..."
       command-not-found: "{prefix}&cThere is no Premium Minecraft Java account with your username."
       command-unavailable: "{prefix}&cMojang is unavailable right now. Try again later."
