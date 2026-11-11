@@ -1,5 +1,6 @@
 package com.example.spigotauth;
 
+import io.papermc.paper.event.player.AsyncChatEvent;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -19,6 +20,7 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerCommandSendEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
@@ -27,6 +29,8 @@ import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.PlayerVelocityEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.projectiles.ProjectileSource;
 
@@ -118,7 +122,14 @@ public final class AuthListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onChat(AsyncPlayerChatEvent event) {
+    public void onModernChat(AsyncChatEvent event) {
+        if (blocked(event.getPlayer())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onLegacyChat(AsyncPlayerChatEvent event) {
         if (blocked(event.getPlayer())) {
             event.setCancelled(true);
         }
@@ -140,6 +151,28 @@ public final class AuthListener implements Listener {
         command = command.toLowerCase(Locale.ROOT);
 
         if (!ALLOWED_COMMANDS.contains(command)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onCommandList(PlayerCommandSendEvent event) {
+        if (!blocked(event.getPlayer())) return;
+        event.getCommands().removeIf(command ->
+                !ALLOWED_COMMANDS.contains(command.toLowerCase(Locale.ROOT)));
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onVelocity(PlayerVelocityEvent event) {
+        if (blocked(event.getPlayer())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onTeleport(PlayerTeleportEvent event) {
+        if (!blocked(event.getPlayer())) return;
+        if (event.getCause() != PlayerTeleportEvent.TeleportCause.PLUGIN) {
             event.setCancelled(true);
         }
     }
