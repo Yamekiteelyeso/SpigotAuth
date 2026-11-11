@@ -50,7 +50,10 @@ public final class PremiumAuthService {
 
         // Once protocol verification succeeds, future logins can challenge this
         // exact UUID immediately without relying on the public profile lookup.
-        premiumPreferences.confirm(profile.name(), profile.uuid());
+        if (!premiumPreferences.confirm(profile.name(), profile.uuid())) {
+            player.kickPlayer(plugin.getMessages().raw("premium.save-error"));
+            return false;
+        }
 
         // Name collisions are possible on mixed-mode servers. A verified
         // Mojang identity does not own an existing LOCAL account merely
