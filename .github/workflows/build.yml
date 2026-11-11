@@ -144,6 +144,10 @@ jobs:
           python3 - <<'PY'
           import socket
           import struct
+          import secrets
+          import subprocess
+          import tempfile
+          from pathlib import Path
 
           HOST = "127.0.0.1"
           PORT = 25579
@@ -262,6 +266,48 @@ jobs:
                   f"challenge={len(challenge)} bytes)."
               )
 
+              # Send an actual RSA encrypted Login Encryption Response with a
+              # deliberately corrupted token: ownership must be rejected,
+              # not silently upgraded to Premium. No Microsoft credentials
+              # or network-side Mojang success are simulated.
+              with tempfile.TemporaryDirectory() as directory:
+                  pubfile = Path(directory) / "server-public-key.der"
+                  pubfile.write_bytes(public_key)
+
+                  def rsa_encrypt(plain):
+                      return subprocess.run(
+                          ["openssl", "pkeyutl", "-encrypt", "-pubin",
+                           "-inkey", str(pubfile), "-keyform", "DER",
+                           "-pkeyopt", "rsa_padding_mode:pkcs1"],
+                          input=plain,
+                          check=True,
+                          capture_output=True
+                      ).stdout
+
+                  secret_cipher = rsa_encrypt(secrets.token_bytes(16))
+                  forged_token = bytes([challenge[0] ^ 0xFF]) + challenge[1:]
+                  token_cipher = rsa_encrypt(forged_token)
+
+              encryption_response = (
+                  varint(0x01)
+                  + varint(len(secret_cipher)) + secret_cipher
+                  + varint(len(token_cipher)) + token_cipher
+              )
+              send_packet(sock, encryption_response)
+
+              # A forged response must never receive Login Success (0x02).
+              try:
+                  response_len = read_varint(sock)
+                  response = recv_exact(sock, response_len)
+                  response_id, _ = decode_varint(response)
+                  if response_id == 0x02:
+                      raise SystemExit(
+                          "SECURITY REGRESSION: forged Premium challenge received Login Success"
+                      )
+              except (ConnectionResetError, ConnectionAbortedError, RuntimeError):
+                  pass
+              print("SLogin protocol smoke test: forged RSA verify token was rejected.")
+
           # Pending /premium with no public UUID lookup must send the exact
           # same official Encryption Request and never bypass session proof.
           with socket.create_connection((HOST, PORT), timeout=10) as sock:
@@ -376,6 +422,13 @@ jobs:
                       )
                   print(f"SLogin RCON command test OK: /{command}")
           PY_RCON
+
+          if ! grep -q "El verify token del Encryption Response no coincide" server.log; then
+            cat server.log
+            echo "SLogin did not reject the forged Premium encryption response."
+            exit 1
+          fi
+          echo "SLogin security smoke test: tampered Premium encryption response rejected."
 
           grep -q "SLogin v1.8.1" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
