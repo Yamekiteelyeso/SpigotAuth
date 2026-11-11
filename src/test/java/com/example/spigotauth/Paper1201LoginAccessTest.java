@@ -40,6 +40,7 @@ class Paper1201LoginAccessTest {
         assertTrue(states.contains("DELAY_ACCEPT"));
         assertTrue(states.contains("ACCEPTED"));
         assertFalse(states.contains("VERIFYING"));
+        assertFalse(states.contains("WAITING_FOR_DUPE_DISCONNECT"));
         assertFalse(states.contains("PROTOCOL_SWITCHING"));
     }
 
