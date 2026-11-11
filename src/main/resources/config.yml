@@ -1,10 +1,20 @@
-# Seguridad de cuentas
+# Seguridad de cuentas locales
 min-password-length: 8
 max-password-length: 64
 max-attempts: 5
 lock-minutes: 5
 login-timeout-seconds: 60
 
-# Detección de perfiles Java en la API oficial de Mojang.
-# Se usa solo como información en servidores offline-mode.
+# Descubrimiento de perfiles Java en la API oficial de Mojang.
+# IMPORTANTE: este lookup NO demuestra propiedad de la cuenta.
 premium-cache-minutes: 10
+
+smart-auth:
+  # Tiempo máximo de una consulta al servicio oficial de sesión.
+  # Un timeout/error durante un desafío Premium debe fallar cerrado.
+  session-timeout-ms: 5000
+
+  # El adaptador pre-login de Paper 1.20.1 todavía no está habilitado.
+  # No cambies esto esperando activar Smart Auth: la opción se reservará
+  # para cuando el adaptador NMS esté implementado y pase la matriz de pruebas.
+  enabled: false
