@@ -94,6 +94,17 @@ jobs:
             jeb_: "placeholder-hash-not-used-by-this-protocol-smoke-test"
           EOF
 
+          # /premium must challenge without a successful public nickname lookup.
+          # This represents a LOCAL registered account that requested migration.
+          cat >> "$SERVER_DIR/plugins/SLogin/accounts.yml" <<'EOF'
+            PremiumPending: "placeholder-hash-not-used-by-this-protocol-smoke-test"
+          EOF
+          cat >> "$SERVER_DIR/plugins/SLogin/premium-preferences.yml" <<'EOF'
+            premiumpending:
+              verified: false
+              pending: true
+          EOF
+
           cd "$SERVER_DIR"
           tail -f /dev/null | java -Xms512M -Xmx1G -jar paper.jar nogui \
             > server.log 2>&1 &
@@ -244,6 +255,32 @@ jobs:
                   f"(serverId={server_id!r}, publicKey={len(public_key)} bytes, "
                   f"challenge={len(challenge)} bytes)."
               )
+
+          # Pending /premium with no public UUID lookup must send the exact
+          # same official Encryption Request and never bypass session proof.
+          with socket.create_connection((HOST, PORT), timeout=10) as sock:
+              sock.settimeout(10)
+              handshake = (
+                  varint(0x00)
+                  + varint(PROTOCOL)
+                  + mc_string(HOST)
+                  + struct.pack(">H", PORT)
+                  + varint(2)
+              )
+              send_packet(sock, handshake)
+              send_packet(
+                  sock,
+                  varint(0x00) + mc_string("PremiumPending") + b"\x00"
+              )
+              packet_length = read_varint(sock)
+              payload = recv_exact(sock, packet_length)
+              packet_id, _ = decode_varint(payload)
+              if packet_id != 0x01:
+                  raise SystemExit(
+                      f"Pending /premium expected Encryption Request 0x01, "
+                      f"got 0x{packet_id:02x}"
+                  )
+              print("SLogin /premium smoke test: pending user receives Encryption Request.")
 
           # A local registered account must remain on the offline/password
           # path even when its nickname belongs to a real Premium account.
