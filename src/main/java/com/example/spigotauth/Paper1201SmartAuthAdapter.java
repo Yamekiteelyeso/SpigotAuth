@@ -15,7 +15,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
 import org.bukkit.craftbukkit.v1_20_R1.CraftServer;
 
-import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import java.lang.reflect.Field;
 import java.security.KeyPair;
@@ -238,10 +237,7 @@ public final class Paper1201SmartAuthAdapter {
                         attempt.keyPair().getPublic()
                 );
 
-                connection.setupEncryption(
-                        MinecraftCipherFactory.create(Cipher.DECRYPT_MODE, sharedSecret),
-                        MinecraftCipherFactory.create(Cipher.ENCRYPT_MODE, sharedSecret)
-                );
+                connection.setupEncryption(sharedSecret);
 
                 attempt.stateField().set(
                         attempt.login(),
