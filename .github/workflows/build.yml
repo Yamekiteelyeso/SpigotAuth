@@ -377,7 +377,7 @@ jobs:
                   print(f"SLogin RCON command test OK: /{command}")
           PY_RCON
 
-          grep -q "SLogin v1.8.0" server.log
+          grep -q "SLogin v1.8.1" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
 
           # Command-map smoke test: every public/admin command must have
@@ -418,6 +418,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SLogin-1.8.0
-          path: build/libs/SLogin-1.8.0.jar
+          name: SLogin-1.8.1
+          path: build/libs/SLogin-1.8.1.jar
           if-no-files-found: error
