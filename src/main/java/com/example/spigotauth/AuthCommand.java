@@ -29,9 +29,9 @@ public final class AuthCommand implements CommandExecutor {
             return true;
         }
 
-        if (auth.isLocked(name)) {
+        if (auth.isLocked(player)) {
             plugin.getMessages().send(player, "auth.locked",
-                    java.util.Map.of("seconds", auth.remainingLockSeconds(name)));
+                    java.util.Map.of("seconds", auth.remainingLockSeconds(player)));
             return true;
         }
 
