@@ -65,11 +65,11 @@ public final class AuthManager {
     }
 
     public void registerFailure(Player player) {
-        int max = Math.max(1, plugin.getConfig().getInt("max-attempts", 5));
+        int max = Math.max(1, plugin.getConfig().getInt("security.max-attempts", 5));
         int count = failures.merge(player.getUniqueId(), 1, Integer::sum);
 
         if (count >= max) {
-            long minutes = Math.max(1L, plugin.getConfig().getLong("lock-minutes", 5));
+            long minutes = Math.max(1L, plugin.getConfig().getLong("security.lock-minutes", 5));
             long lockMillis = Math.multiplyExact(minutes, 60_000L);
             locked.put(normalize(player.getName()), System.currentTimeMillis() + lockMillis);
             failures.remove(player.getUniqueId());
@@ -82,7 +82,7 @@ public final class AuthManager {
     }
 
     public void startTimeout(Player player) {
-        long seconds = Math.max(10L, plugin.getConfig().getLong("login-timeout-seconds", 60));
+        long seconds = Math.max(10L, plugin.getConfig().getLong("security.login-timeout-seconds", 60));
         UUID playerId = player.getUniqueId();
         cancelTimeout(playerId);
 
