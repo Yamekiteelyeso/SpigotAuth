@@ -29,8 +29,6 @@ class PluginMetadataTest {
         }
         assertTrue(meta.getStringList("commands.login.aliases").contains("l"));
         assertTrue(meta.getStringList("commands.register.aliases").contains("r"));
-        assertEquals("slogin.admin",
-                "slogin.admin"); // permission key is checked below
         assertTrue(meta.isConfigurationSection("permissions.slogin.admin"));
     }
 
