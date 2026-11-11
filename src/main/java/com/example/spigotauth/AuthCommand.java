@@ -45,8 +45,8 @@ public final class AuthCommand implements CommandExecutor {
                 return true;
             }
 
-            int min = plugin.getConfig().getInt("min-password-length", 8);
-            int max = plugin.getConfig().getInt("max-password-length", 64);
+            int min = plugin.getConfig().getInt("security.min-password-length", 8);
+            int max = plugin.getConfig().getInt("security.max-password-length", 64);
             if (args[0].length() < min || args[0].length() > max) {
                 plugin.getMessages().send(player, "register.length",
                         java.util.Map.of("min", min, "max", max));
