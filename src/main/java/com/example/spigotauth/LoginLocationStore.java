@@ -88,6 +88,10 @@ public final class LoginLocationStore {
         this.data = YamlConfiguration.loadConfiguration(file);
     }
 
+    public synchronized void reload() {
+        this.data = YamlConfiguration.loadConfiguration(file);
+    }
+
     private static String base(Spot spot) {
         return "locations." + spot.key();
     }
