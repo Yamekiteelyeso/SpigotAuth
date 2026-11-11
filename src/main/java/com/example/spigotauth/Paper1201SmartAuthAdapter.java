@@ -219,12 +219,14 @@ public final class Paper1201SmartAuthAdapter {
                 return;
             }
 
-            // A local account is never silently converted into Premium.
-            // Only its already-authenticated owner can request migration
-            // through /premium. This prevents Mojang nickname discovery from
-            // bypassing the local password.
-            if (plugin.getAccounts().isRegistered(name)) {
-                debug("Cuenta local existente; se exige contraseña: " + name);
+            // Premium-first login: an existing local password record is NOT
+            // evidence that the connecting client is offline. Challenge
+            // registered names too when configured, but never merge local
+            // and Mojang identities just because they share a username.
+            if (plugin.getAccounts().isRegistered(name)
+                    && !plugin.getConfig().getBoolean(
+                    "smart-auth.auto-login-registered-premium", true)) {
+                debug("Cuenta local con detección Premium desactivada: " + name);
                 continueOffline(ctx, originalPacket);
                 return;
             }

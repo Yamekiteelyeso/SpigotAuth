@@ -46,13 +46,25 @@ public final class PremiumAuthService {
             return false;
         }
 
+        boolean wasPendingMigration = premiumPreferences.isPending(profile.name());
+
         // Once protocol verification succeeds, future logins can challenge this
         // exact UUID immediately without relying on the public profile lookup.
-        premiumPreferences.confirm(profile.name(), profile.uuid());
+        if (!premiumPreferences.confirm(profile.name(), profile.uuid())) {
+            player.kickPlayer(plugin.getMessages().raw("premium.save-error"));
+            return false;
+        }
 
-        // A verified Premium identity must not keep a stale local password
-        // account that could later be mistaken for an alternate auth route.
-        localAccounts.remove(profile.name());
+        // Name collisions are possible on mixed-mode servers. A verified
+        // Mojang identity does not own an existing LOCAL account merely
+        // because its username matches. Preserve the local password so we
+        // never destroy another player's account on automatic Premium login.
+        // Only an explicit /premium migration can retire a local password,
+        // after official proof and separate player-data migration policy.
+        if (wasPendingMigration) {
+            plugin.getLogger().info("Migración Premium confirmada para "
+                    + profile.name() + "; contraseña local conservada para recuperación.");
+        }
 
         auth.markAuthenticated(player);
         return true;

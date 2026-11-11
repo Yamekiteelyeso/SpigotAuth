@@ -26,6 +26,10 @@ public final class PremiumChecker {
 
     private static final Pattern PROFILE_ID =
             Pattern.compile("\"id\"\\s*:\\s*\"([0-9a-fA-F]{32})\"");
+    private static final Pattern PROFILE_NAME =
+            Pattern.compile("\"name\"\\s*:\\s*\"([A-Za-z0-9_]{3,16})\"");
+    private static final Pattern DEMO = Pattern.compile(
+            "\"demo\"\\s*:\\s*true", Pattern.CASE_INSENSITIVE);
     private static final Pattern VALID_NAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
 
     private static final String[] LOOKUP_ENDPOINTS = {
@@ -78,20 +82,22 @@ public final class PremiumChecker {
     }
 
     private Result queryProfile(String name) {
-        Result primary = queryEndpoint(LOOKUP_ENDPOINTS[0] + name);
+        Result primary = queryEndpoint(LOOKUP_ENDPOINTS[0] + name, name);
+        if (primary.status() == Status.PREMIUM) return primary;
 
-        // Minecraft Services is the primary authoritative lookup. A definitive
-        // PREMIUM/NOT_FOUND result does not need a second HTTP request.
-        if (primary.status() != Status.UNAVAILABLE) {
-            return primary;
+        // A single HTTP 404 is not sufficient to classify a nickname as
+        // cracked: Mojang gateways and caches can disagree temporarily.
+        Result alternate = queryEndpoint(LOOKUP_ENDPOINTS[1] + name, name);
+        if (alternate.status() == Status.PREMIUM) return alternate;
+
+        if (primary.status() == Status.NOT_FOUND
+                && alternate.status() == Status.NOT_FOUND) {
+            return new Result(Status.NOT_FOUND, null);
         }
-
-        // Legacy Mojang lookup is only a resilience fallback for outages,
-        // throttling or unexpected responses from the primary service.
-        return queryEndpoint(LOOKUP_ENDPOINTS[1] + name);
+        return new Result(Status.UNAVAILABLE, null);
     }
 
-    private Result queryEndpoint(String endpoint) {
+    private Result queryEndpoint(String endpoint, String requestedName) {
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) new URL(endpoint).openConnection();
@@ -103,7 +109,7 @@ public final class PremiumChecker {
 
             int status = connection.getResponseCode();
             if (status == HttpURLConnection.HTTP_OK) {
-                return parse(connection.getInputStream());
+                return parse(connection.getInputStream(), requestedName);
             }
 
             if (status == HttpURLConnection.HTTP_NO_CONTENT
@@ -121,7 +127,7 @@ public final class PremiumChecker {
         }
     }
 
-    private static Result parse(InputStream stream) throws Exception {
+    static Result parse(InputStream stream, String requestedName) throws Exception {
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             StringBuilder body = new StringBuilder();
@@ -129,7 +135,12 @@ public final class PremiumChecker {
             while ((line = reader.readLine()) != null) body.append(line);
 
             Matcher matcher = PROFILE_ID.matcher(body);
-            if (!matcher.find()) return new Result(Status.UNAVAILABLE, null);
+            Matcher nameMatcher = PROFILE_NAME.matcher(body);
+            if (!matcher.find() || !nameMatcher.find()
+                    || !nameMatcher.group(1).equalsIgnoreCase(requestedName)
+                    || DEMO.matcher(body).find()) {
+                return new Result(Status.UNAVAILABLE, null);
+            }
 
             String rawId = matcher.group(1);
             String formattedId = rawId.replaceFirst(

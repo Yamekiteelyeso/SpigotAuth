@@ -85,10 +85,14 @@ jobs:
             notch:
               uuid: "069a79f4-44e9-4726-a5be-fca90e38aaf5"
               verified: true
+            jeb_:
+              uuid: "853c80ef-3c37-49fd-aa49-938b674adae6"
+              verified: true
           EOF
 
-          # A local account with a Premium nickname must stay on the local
-          # password path until its owner explicitly runs /premium.
+          # A registered LOCAL account with a known Premium nickname must
+          # receive the same official challenge; local account data remains
+          # separate and preserved even after Premium verification.
           cat > "$SERVER_DIR/plugins/SLogin/accounts.yml" <<'EOF'
           accounts:
             jeb_: "placeholder-hash-not-used-by-this-protocol-smoke-test"
@@ -282,8 +286,8 @@ jobs:
                   )
               print("SLogin /premium smoke test: pending user receives Encryption Request.")
 
-          # A local registered account must remain on the offline/password
-          # path even when its nickname belongs to a real Premium account.
+          # Premium-first must apply even when the name was already registered
+          # locally. A known Premium UUID gets challenged instead of /login.
           with socket.create_connection((HOST, PORT), timeout=10) as sock:
               sock.settimeout(10)
 
@@ -303,19 +307,19 @@ jobs:
               payload = recv_exact(sock, packet_length)
               packet_id, _ = decode_varint(payload)
 
-              if packet_id == 0x01:
+              if packet_id != 0x01:
                   raise SystemExit(
-                      "Local registered account jeb_ incorrectly received "
-                      "a Premium Encryption Request."
+                      "Registered Premium account jeb_ must receive "
+                      f"an official Encryption Request, got 0x{packet_id:02x}."
                   )
 
               print(
-                  "SLogin protocol smoke test: registered local Premium-name "
-                  f"account stayed on local auth path (first packet=0x{packet_id:02x})."
+                  "SLogin protocol smoke test: registered username jeb_ "
+                  "received Premium Encryption Request despite local account."
               )
           PY
 
-          grep -q "SLogin v1.6.0" server.log
+          grep -q "SLogin v1.7.0" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
 
           if grep -E "Error occurred while enabling SLogin|Could not load.*SLogin|\[SLogin\].*(SEVERE|ERROR)" server.log; then
@@ -345,6 +349,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SLogin-1.6.0
-          path: build/libs/SLogin-1.6.0.jar
+          name: SLogin-1.7.0
+          path: build/libs/SLogin-1.7.0.jar
           if-no-files-found: error
