@@ -153,7 +153,6 @@ public final class Paper1201SmartAuthAdapter {
                 if (!enabled || !channel.isActive()) return;
                 if (channel.pipeline().get(HANDLER_NAME) != null) return;
 
-                activeChannels.add(channel);
                 channel.closeFuture().addListener(done -> activeChannels.remove(channel));
 
                 debug("Inicializando canal de login " + channel.id());
@@ -215,6 +214,7 @@ public final class Paper1201SmartAuthAdapter {
         private void handleHello(ChannelHandlerContext ctx,
                                  Object originalPacket,
                                  ServerboundHelloPacket hello) {
+            activeChannels.add(channel);
             pause(channel);
 
             String name = hello.name();
@@ -296,6 +296,7 @@ public final class Paper1201SmartAuthAdapter {
 
         private void continueOffline(ChannelHandlerContext ctx, Object originalPacket) {
             premiumAttempt = null;
+            activeChannels.remove(channel);
             ctx.fireChannelRead(originalPacket);
             resume(channel);
         }
@@ -486,7 +487,10 @@ public final class Paper1201SmartAuthAdapter {
                     logger.info("SLogin verificó Premium: "
                             + verified.getName() + " (" + verified.getId() + ")");
 
-                    channel.eventLoop().execute(() -> resume(channel));
+                    channel.eventLoop().execute(() -> {
+                        activeChannels.remove(channel);
+                        resume(channel);
+                    });
                 } catch (Throwable failure) {
                     channel.eventLoop().execute(() ->
                             failPremium(attempt.name(), failure));
