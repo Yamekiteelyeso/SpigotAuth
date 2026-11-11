@@ -27,6 +27,20 @@ class PremiumPreferenceStoreTest {
     }
 
     @Test
+    void pendingPreferenceCanBeRolledBack() {
+        var store = new PremiumPreferenceStore(
+                tempDir.resolve("prefs-rollback.yml").toFile(),
+                Logger.getLogger("test"));
+        UUID uuid = UUID.randomUUID();
+
+        assertTrue(store.request("PremiumUser", uuid));
+        assertEquals(uuid, store.expectedUuid("PremiumUser"));
+        assertTrue(store.clear("PremiumUser"));
+        assertNull(store.expectedUuid("PremiumUser"));
+        assertFalse(store.isVerified("PremiumUser"));
+    }
+
+    @Test
     void confirmedPreferenceBecomesVerified() {
         var store = new PremiumPreferenceStore(
                 tempDir.resolve("prefs.yml").toFile(),
