@@ -42,6 +42,10 @@ public final class PremiumChecker {
         this.cacheMillis = Math.max(0L, cacheMillis);
     }
 
+    public void clearCache() {
+        cache.clear();
+    }
+
     public void check(String name, Consumer<Result> callback) {
         if (name == null || !VALID_NAME.matcher(name).matches()) {
             callback.accept(new Result(Status.NOT_FOUND, null));
