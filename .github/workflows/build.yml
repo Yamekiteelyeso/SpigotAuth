@@ -2,7 +2,7 @@ name: Build plugin
 
 on:
   push:
-    branches: ["main", "improve/**"]
+    branches: ["main", "improve/**", "feature/**"]
   pull_request:
   workflow_dispatch:
 
@@ -15,11 +15,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: maven
-      - name: Build with Maven
-        run: mvn -B clean verify
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+      - name: Build and test
+        run: gradle --no-daemon clean build
       - uses: actions/upload-artifact@v4
         with:
-          name: SpigotAuth-1.1.0
-          path: target/SpigotAuth-1.1.0.jar
+          name: SpigotAuth-1.2.0
+          path: build/libs/SpigotAuth-1.2.0.jar
           if-no-files-found: error
