@@ -69,17 +69,17 @@ public final class PremiumChecker {
     }
 
     private Result queryProfile(String name) {
-        boolean sawNotFound = false;
+        Result primary = queryEndpoint(LOOKUP_ENDPOINTS[0] + name);
 
-        for (String base : LOOKUP_ENDPOINTS) {
-            Result result = queryEndpoint(base + name);
-            if (result.status() == Status.PREMIUM) return result;
-            if (result.status() == Status.NOT_FOUND) sawNotFound = true;
+        // Minecraft Services is the primary authoritative lookup. A definitive
+        // PREMIUM/NOT_FOUND result does not need a second HTTP request.
+        if (primary.status() != Status.UNAVAILABLE) {
+            return primary;
         }
 
-        return sawNotFound
-                ? new Result(Status.NOT_FOUND, null)
-                : new Result(Status.UNAVAILABLE, null);
+        // Legacy Mojang lookup is only a resilience fallback for outages,
+        // throttling or unexpected responses from the primary service.
+        return queryEndpoint(LOOKUP_ENDPOINTS[1] + name);
     }
 
     private Result queryEndpoint(String endpoint) {
