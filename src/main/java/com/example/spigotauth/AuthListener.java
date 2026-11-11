@@ -188,7 +188,11 @@ public final class AuthListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onGameMode(PlayerGameModeChangeEvent event) {
-        if (blocked(event.getPlayer()) && event.getNewGameMode() != GameMode.SURVIVAL) {
+        // Use the guard itself instead of generic auth state. deactivate()
+        // removes the guard snapshot before restoring the original game mode,
+        // so SLogin never cancels its own cleanup on quit/auth success.
+        if (plugin.getPreAuthGuard().isActive(event.getPlayer())
+                && event.getNewGameMode() != GameMode.SURVIVAL) {
             event.setCancelled(true);
         }
     }
