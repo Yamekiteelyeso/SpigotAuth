@@ -45,6 +45,28 @@ public final class PremiumPreferenceStore {
         }
     }
 
+    /** A pending migration can be checked via Mojang session proof without a
+     * public nickname lookup or a pre-known UUID. */
+    public synchronized boolean isPending(String name) {
+        return name != null && data.getBoolean(base(name) + ".pending", false)
+                && !isVerified(name);
+    }
+
+    public synchronized boolean requestUnresolved(String name) {
+        if (name == null || !name.matches("[A-Za-z0-9_]{3,16}")) return false;
+        String path = base(name);
+        if (isVerified(name)) return false;
+        Object previous = data.get(path);
+        data.set(path + ".uuid", null);
+        data.set(path + ".verified", false);
+        data.set(path + ".pending", true);
+        if (AtomicYamlFile.save(data, file, logger, "premium-preferences.yml")) {
+            return true;
+        }
+        data.set(path, previous);
+        return false;
+    }
+
     public synchronized boolean isVerified(String name) {
         return data.getBoolean(base(name) + ".verified", false);
     }
@@ -77,15 +99,18 @@ public final class PremiumPreferenceStore {
         String path = base(name);
         String oldUuid = data.getString(path + ".uuid");
         Object oldVerified = data.get(path + ".verified");
+        Object oldPending = data.get(path + ".pending");
 
         data.set(path + ".uuid", uuid.toString());
         data.set(path + ".verified", verified);
+        data.set(path + ".pending", !verified);
 
         if (AtomicYamlFile.save(data, file, logger, "premium-preferences.yml")) {
             return true;
         }
         data.set(path + ".uuid", oldUuid);
         data.set(path + ".verified", oldVerified);
+        data.set(path + ".pending", oldPending);
         return false;
     }
 }
