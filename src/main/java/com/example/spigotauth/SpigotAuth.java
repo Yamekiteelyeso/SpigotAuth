@@ -59,7 +59,7 @@ public final class SpigotAuth extends JavaPlugin {
         getCommand("premium").setExecutor(accountManagement);
         getCommand("slogin").setExecutor(new SLoginCommand(this));
 
-        getLogger().info("SLogin v1.5.0 — Synex Login activado. Idioma: " + messages.language());
+        getLogger().info("SLogin v1.6.0 — Synex Login activado. Idioma: " + messages.language());
         if (!getServer().getOnlineMode() && smartAuthAdapter != null) {
             getLogger().info("Premium Smart Auth activo: las cuentas verificadas entran sin /register ni /login.");
         }
