@@ -319,7 +319,7 @@ jobs:
               )
           PY
 
-          grep -q "SLogin v1.7.0" server.log
+          grep -q "SLogin v1.8.0" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
 
           if grep -E "Error occurred while enabling SLogin|Could not load.*SLogin|\[SLogin\].*(SEVERE|ERROR)" server.log; then
@@ -349,6 +349,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SLogin-1.7.0
-          path: build/libs/SLogin-1.7.0.jar
+          name: SLogin-1.8.0
+          path: build/libs/SLogin-1.8.0.jar
           if-no-files-found: error
