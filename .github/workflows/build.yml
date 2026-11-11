@@ -364,6 +364,8 @@ jobs:
                   (104, "slogin loginready show", "loginready"),
                   (105, "slogin spawnlogin delete", "spawnlogin"),
                   (106, "slogin loginready delete", "loginready"),
+                  (107, "slogin premiumcancel PremiumPending", "PremiumPending"),
+                  (108, "slogin premiumcancel PremiumPending", "no tiene"),
               ]:
                   send_rcon(sock, request_id, 2, command)
                   got_id, _, result = recv_rcon(sock)
