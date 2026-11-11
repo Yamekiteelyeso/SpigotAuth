@@ -20,6 +20,17 @@ jobs:
           gradle-version: '8.5'
       - name: Build and test
         run: gradle --no-daemon clean build
+      - name: Inspect Paper 1.20.1 login bytecode
+        run: |
+          JAR=$(find ~/.gradle/caches -type f -name '*.jar' | grep -E 'paper.*1\.20\.1|paperweight' | head -n 1 || true)
+          echo "Candidate: $JAR"
+          find ~/.gradle/caches -type f -name '*.jar' | while read j; do
+            if jar tf "$j" 2>/dev/null | grep -q 'net/minecraft/server/network/ServerLoginPacketListenerImpl.class'; then
+              echo "SERVER_JAR=$j"
+              javap -classpath "$j" -c -p net.minecraft.server.network.ServerLoginPacketListenerImpl | sed -n '/handleHello/,/handleCustomQueryPacket/p'
+              break
+            fi
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: SLogin-1.3.0
