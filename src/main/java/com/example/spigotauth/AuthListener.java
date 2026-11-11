@@ -54,8 +54,19 @@ public final class AuthListener implements Listener {
             return;
         }
 
-        // En offline-mode solo se informa del perfil. No se omite el login:
-        // cualquier usuario podría entrar usando el nombre de otra persona.
+        Paper1201SmartAuthAdapter smart = plugin.getSmartAuthAdapter();
+        if (smart != null && smart.consumeVerifiedJoin(player.getName(), player.getUniqueId())) {
+            var verified = new MinecraftSessionService.VerifiedProfile(
+                    player.getUniqueId(), player.getName());
+            if (plugin.getPremiumAuth().authenticateVerified(player, verified)) {
+                player.sendMessage(ChatColor.GRAY
+                        + "Tu identidad fue verificada durante el protocolo de login.");
+            }
+            return;
+        }
+
+        // Los jugadores offline no desafiados siguen usando contraseña local.
+        // El lookup público sigue siendo únicamente informativo.
         plugin.getPremium().check(player.getName(), result -> {
             if (!player.isOnline()) return;
 

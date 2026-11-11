@@ -17,4 +17,4 @@ smart-auth:
   # El adaptador pre-login de Paper 1.20.1 todavía no está habilitado.
   # No cambies esto esperando activar Smart Auth: la opción se reservará
   # para cuando el adaptador NMS esté implementado y pase la matriz de pruebas.
-  enabled: false
+  enabled: true

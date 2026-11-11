@@ -13,6 +13,7 @@ public final class SpigotAuth extends JavaPlugin {
     private PremiumAccountStore premiumAccounts;
     private PremiumAuthService premiumAuth;
     private MinecraftSessionService sessionService;
+    private Paper1201SmartAuthAdapter smartAuthAdapter;
 
     @Override
     public void onEnable() {
@@ -30,6 +31,14 @@ public final class SpigotAuth extends JavaPlugin {
         sessionService = new MinecraftSessionService(Duration.ofMillis(sessionTimeoutMs));
 
         getServer().getPluginManager().registerEvents(new AuthListener(this), this);
+
+        if (!getServer().getOnlineMode() && getConfig().getBoolean("smart-auth.enabled", true)) {
+            smartAuthAdapter = new Paper1201SmartAuthAdapter(this);
+            if (!smartAuthAdapter.enable()) {
+                getLogger().severe("Smart Authentication no pudo activarse; se mantiene el login local.");
+                smartAuthAdapter = null;
+            }
+        }
 
         AuthCommand executor = new AuthCommand(this);
         if (getCommand("register") == null || getCommand("login") == null) {
@@ -50,6 +59,7 @@ public final class SpigotAuth extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (smartAuthAdapter != null) smartAuthAdapter.disable();
         if (auth != null) auth.shutdown();
     }
 
@@ -75,5 +85,9 @@ public final class SpigotAuth extends JavaPlugin {
 
     public MinecraftSessionService getSessionService() {
         return sessionService;
+    }
+
+    public Paper1201SmartAuthAdapter getSmartAuthAdapter() {
+        return smartAuthAdapter;
     }
 }
