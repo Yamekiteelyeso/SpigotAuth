@@ -75,6 +75,17 @@ jobs:
 
           cp "$PLUGIN_JAR" "$SERVER_DIR/plugins/SLogin.jar"
 
+          # Seed one already-known Premium identity so this smoke test does not
+          # depend on the public profile lookup service. Ownership is NOT faked:
+          # we only test that SLogin enters the encryption-challenge path.
+          mkdir -p "$SERVER_DIR/plugins/SLogin"
+          cat > "$SERVER_DIR/plugins/SLogin/premium-preferences.yml" <<'EOF'
+          names:
+            notch:
+              uuid: "069a79f4-44e9-4726-a5be-fca90e38aaf5"
+              verified: true
+          EOF
+
           cd "$SERVER_DIR"
           tail -f /dev/null | java -Xms512M -Xmx1G -jar paper.jar nogui \
             > server.log 2>&1 &
@@ -94,23 +105,125 @@ jobs:
             sleep 1
           done
 
-          kill "$SERVER_PID" 2>/dev/null || true
-          wait "$SERVER_PID" 2>/dev/null || true
-
-          cat server.log
-
           if [ "$READY" -ne 1 ]; then
+            cat server.log
+            kill "$SERVER_PID" 2>/dev/null || true
+            wait "$SERVER_PID" 2>/dev/null || true
             echo "Paper did not reach the ready state."
             exit 1
           fi
+
+          # Protocol 763 (Minecraft 1.20.1): Handshake -> Login Start.
+          # The seeded Premium identity must receive Login Encryption Request
+          # packet id 0x01 even though server.properties uses online-mode=false.
+          python3 - <<'PY'
+          import socket
+          import struct
+
+          HOST = "127.0.0.1"
+          PORT = 25579
+          PROTOCOL = 763
+          USERNAME = "Notch"
+
+          def varint(value):
+              value &= 0xffffffff
+              out = bytearray()
+              while True:
+                  b = value & 0x7f
+                  value >>= 7
+                  if value:
+                      out.append(b | 0x80)
+                  else:
+                      out.append(b)
+                      return bytes(out)
+
+          def mc_string(value):
+              data = value.encode("utf-8")
+              return varint(len(data)) + data
+
+          def send_packet(sock, payload):
+              sock.sendall(varint(len(payload)) + payload)
+
+          def read_varint(sock):
+              result = 0
+              shift = 0
+              for _ in range(5):
+                  raw = sock.recv(1)
+                  if not raw:
+                      raise RuntimeError("connection closed while reading VarInt")
+                  byte = raw[0]
+                  result |= (byte & 0x7f) << shift
+                  if not (byte & 0x80):
+                      return result
+                  shift += 7
+              raise RuntimeError("VarInt too large")
+
+          def recv_exact(sock, count):
+              data = bytearray()
+              while len(data) < count:
+                  chunk = sock.recv(count - len(data))
+                  if not chunk:
+                      raise RuntimeError("connection closed while reading packet")
+                  data.extend(chunk)
+              return bytes(data)
+
+          def decode_varint(data, offset=0):
+              result = 0
+              shift = 0
+              pos = offset
+              for _ in range(5):
+                  byte = data[pos]
+                  pos += 1
+                  result |= (byte & 0x7f) << shift
+                  if not (byte & 0x80):
+                      return result, pos
+                  shift += 7
+              raise RuntimeError("packet id VarInt too large")
+
+          with socket.create_connection((HOST, PORT), timeout=10) as sock:
+              sock.settimeout(10)
+
+              handshake = (
+                  varint(0x00)
+                  + varint(PROTOCOL)
+                  + mc_string(HOST)
+                  + struct.pack(">H", PORT)
+                  + varint(2)
+              )
+              send_packet(sock, handshake)
+
+              # 1.20.1 ServerboundHelloPacket:
+              # packet id 0x00, username, Optional<UUID>.
+              login_start = varint(0x00) + mc_string(USERNAME) + b"\x00"
+              send_packet(sock, login_start)
+
+              packet_length = read_varint(sock)
+              payload = recv_exact(sock, packet_length)
+              packet_id, _ = decode_varint(payload)
+
+              if packet_id != 0x01:
+                  raise SystemExit(
+                      f"Expected Login Encryption Request 0x01, got 0x{packet_id:02x}"
+                  )
+
+              print("SLogin protocol smoke test: Encryption Request received.")
+          PY
 
           grep -q "SLogin v1.4.0" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
 
           if grep -E "Error occurred while enabling SLogin|Could not load.*SLogin|\[SLogin\].*(SEVERE|ERROR)" server.log; then
+            cat server.log
+            kill "$SERVER_PID" 2>/dev/null || true
+            wait "$SERVER_PID" 2>/dev/null || true
             echo "SLogin emitted a runtime error during the Paper boot test."
             exit 1
           fi
+
+          kill "$SERVER_PID" 2>/dev/null || true
+          wait "$SERVER_PID" 2>/dev/null || true
+
+          cat server.log
 
       - uses: actions/upload-artifact@v4
         with:
