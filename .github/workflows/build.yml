@@ -322,6 +322,17 @@ jobs:
           grep -q "SLogin v1.8.0" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
 
+          # Command-map smoke test: every public/admin command must have
+          # actually resolved from plugin.yml and received its executor.
+          for COMMAND in register login changepass premium slogin; do
+            if ! grep -q "Comando registrado: /$COMMAND" server.log; then
+              cat server.log
+              echo "SLogin failed to register /$COMMAND"
+              exit 1
+            fi
+          done
+          echo "SLogin command registration smoke test: 5/5 registered."
+
           if grep -E "Error occurred while enabling SLogin|Could not load.*SLogin|\[SLogin\].*(SEVERE|ERROR)" server.log; then
             cat server.log
             kill "$SERVER_PID" 2>/dev/null || true
