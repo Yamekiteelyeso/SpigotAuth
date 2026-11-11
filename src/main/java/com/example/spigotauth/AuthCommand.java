@@ -63,6 +63,7 @@ public final class AuthCommand implements CommandExecutor {
 
             auth.markAuthenticated(player);
             plugin.getMessages().send(player, "auth.registered");
+            offerPremiumQuestion(player);
             return true;
         }
 
@@ -78,6 +79,7 @@ public final class AuthCommand implements CommandExecutor {
             if (accounts.check(name, args[0])) {
                 auth.markAuthenticated(player);
                 plugin.getMessages().send(player, "auth.logged-in");
+                offerPremiumQuestion(player);
             } else {
                 auth.registerFailure(player);
             }
@@ -85,5 +87,25 @@ public final class AuthCommand implements CommandExecutor {
         }
 
         return false;
+    }
+
+    private void offerPremiumQuestion(Player player) {
+        if (!plugin.getConfig().getBoolean("smart-auth.premium-question", true)) return;
+
+        String name = player.getName();
+        if (!plugin.getAccounts().isRegistered(name)) return;
+        if (plugin.getPremiumAccounts().findVerifiedUuidByName(name) != null) return;
+        if (plugin.getPremiumPreferences().expectedUuid(name) != null) return;
+
+        plugin.getPremium().check(name, result -> {
+            if (!player.isOnline() || !plugin.getAuth().isAuthenticated(player)) return;
+            if (result.status() == PremiumChecker.Status.PREMIUM) {
+                plugin.getMessages().sendLines(
+                        player,
+                        "premium.question",
+                        java.util.Map.of("player", name)
+                );
+            }
+        });
     }
 }
