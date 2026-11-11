@@ -33,6 +33,7 @@ IMPORTANT: A public nickname lookup is not proof of identity. Premium autologin 
 | /slogin spawnlogin delete | Delete location |
 | /slogin loginready delete | Delete location |
 | /slogin premiumcancel player | Cancel a pending Premium migration (admin only; never changes verified Premium accounts) |
+| /slogin premiumcheck player | Diagnose public Minecraft profile lookup (not authentication) |
 
 Location actions: set/edit/editar, delete/remove/clear/borrar, show/info/ver, tp/teleport.
 A player with slogin.admin (OP by default) must be standing on a block to save a location; the saved point centers X and Z, preserves standing height and view direction, and includes the world. Both points are independently saved in plugins/SLogin/locations.yml. If unset, automatic teleports are skipped. Console can show/delete locations but cannot set/teleport.
@@ -79,3 +80,7 @@ CI verifies Java build, unit tests, command metadata and Paper 1.20.1 offline-mo
 A failed Mojang challenge must **never** automatically cancel an owner's pending /premium migration, because another client can use the same username to force a failed challenge. An admin may clear a stuck pending migration with /slogin premiumcancel <player>, and the existing local password is retained. Verified Premium account mappings are not downgraded by that command.
 
 An empty equipment slot must not trigger an exception during pre-auth cleanup; tests cover this. These are regression fixes, not proof of complete Premium Microsoft authentication on a real client.
+
+## Premium connection troubleshooting
+
+Run `/slogin status` to ensure Smart Auth is active on Paper 1.20.1, then `/slogin premiumcheck <name>` to diagnose whether Mojang's public profile service is reachable. A positive profile lookup is NOT proof of ownership; the client's session must pass Minecraft's encrypted challenge plus `hasJoinedServer`. The connection now reports a distinct message for invalid official sessions versus Mojang/network outages. A `/slogin reload` closes only connections still in the authentication handshake, not already logged-in players.
