@@ -30,6 +30,10 @@ smart-auth:
   # true  = se rechazan todos los logins hasta poder verificar.
   fail-closed-on-lookup-error: false
 
+  # /premium guarda el UUID Premium esperado y requiere reconectar para
+  # ejecutar el challenge de cifrado antes de PlayerJoinEvent.
+  premium-command-reconnect: true
+
 # Mensajes editables. El idioma activo se elige arriba con language: es/en.
 messages:
   es:
@@ -44,6 +48,14 @@ messages:
       verification-unavailable: "&cNo se pudo verificar tu cuenta Premium ahora mismo. Inténtalo de nuevo."
       verification-start-error: "&cNo se pudo iniciar la verificación Premium."
       incompatible-login-state: "&cTu conexión llegó en un estado de login no compatible."
+      command-usage: "{prefix}&eUso: &f/premium"
+      command-checking: "{prefix}&7Comprobando tu perfil Premium..."
+      command-not-found: "{prefix}&cNo existe una cuenta Premium de Minecraft Java con tu nombre."
+      command-unavailable: "{prefix}&cMojang no está disponible ahora mismo. Inténtalo más tarde."
+      command-save-error: "{prefix}&cNo se pudo guardar tu preferencia Premium."
+      command-enabled: "{prefix}&aModo Premium preparado. &7En tu siguiente conexión SLogin verificará tu sesión oficial."
+      command-already: "{prefix}&aTu identidad ya está protegida como Premium."
+      command-reconnect: "&aModo Premium preparado.\n&7Vuelve a entrar con tu cuenta Premium para verificarla."
     auth:
       already-authenticated: "{prefix}&aYa estás autenticado."
       registered: "{prefix}&a✔ Cuenta creada. Ya puedes jugar."
@@ -72,10 +84,17 @@ messages:
         - "&8&m--------------------------------"
         - "&bInicio de sesión"
         - "&7Usa &f/login <contraseña>"
+        - "&7También puedes usar &f/l <contraseña>"
         - "&7Tienes &f{seconds}s &7para autenticarte."
         - "&8&m--------------------------------"
       not-registered: "{prefix}&eNo estás registrado. Usa &f/register <contraseña> <confirmar>&e."
-      usage: "{prefix}&eUso: &f/login <contraseña>"
+      usage: "{prefix}&eUso: &f/login <contraseña> &7o &f/l <contraseña>"
+    changepass:
+      usage: "{prefix}&eUso: &f/changepass <contraseña-vieja> <contraseña-nueva>"
+      not-local: "{prefix}&eLas cuentas Premium verificadas no usan contraseña local."
+      wrong-old: "{prefix}&cLa contraseña actual es incorrecta."
+      save-error: "{prefix}&cNo se pudo guardar la nueva contraseña."
+      success: "{prefix}&a✔ Contraseña cambiada correctamente."
     admin:
       reload-ok: "{prefix}&aConfiguración recargada. Idioma activo: &f{language}&a."
       no-permission: "{prefix}&cNo tienes permiso."
@@ -94,6 +113,14 @@ messages:
       verification-unavailable: "&cYour Premium account could not be verified right now. Try again."
       verification-start-error: "&cPremium verification could not be started."
       incompatible-login-state: "&cYour connection reached an unsupported login state."
+      command-usage: "{prefix}&eUsage: &f/premium"
+      command-checking: "{prefix}&7Checking your Premium profile..."
+      command-not-found: "{prefix}&cThere is no Premium Minecraft Java account with your username."
+      command-unavailable: "{prefix}&cMojang is unavailable right now. Try again later."
+      command-save-error: "{prefix}&cYour Premium preference could not be saved."
+      command-enabled: "{prefix}&aPremium mode prepared. &7On your next connection SLogin will verify your official session."
+      command-already: "{prefix}&aYour identity is already protected as Premium."
+      command-reconnect: "&aPremium mode prepared.\n&7Reconnect using your Premium account to verify it."
     auth:
       already-authenticated: "{prefix}&aYou are already authenticated."
       registered: "{prefix}&a✔ Account created. You can now play."
@@ -122,10 +149,17 @@ messages:
         - "&8&m--------------------------------"
         - "&bLogin required"
         - "&7Use &f/login <password>"
+        - "&7You can also use &f/l <password>"
         - "&7You have &f{seconds}s &7to authenticate."
         - "&8&m--------------------------------"
       not-registered: "{prefix}&eYou are not registered. Use &f/register <password> <confirm>&e."
-      usage: "{prefix}&eUsage: &f/login <password>"
+      usage: "{prefix}&eUsage: &f/login <password> &7or &f/l <password>"
+    changepass:
+      usage: "{prefix}&eUsage: &f/changepass <old-password> <new-password>"
+      not-local: "{prefix}&eVerified Premium accounts do not use a local password."
+      wrong-old: "{prefix}&cYour current password is incorrect."
+      save-error: "{prefix}&cThe new password could not be saved."
+      success: "{prefix}&a✔ Password changed successfully."
     admin:
       reload-ok: "{prefix}&aConfiguration reloaded. Active language: &f{language}&a."
       no-permission: "{prefix}&cYou do not have permission."
