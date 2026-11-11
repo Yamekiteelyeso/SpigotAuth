@@ -27,6 +27,14 @@ smart-auth:
   # oficial incluso en su primer acceso, similar a nLogin Premium.
   challenge-if-premium-nickname: true
 
+  # También intenta verificar por Mojang los nombres que ya aparecen en
+  # accounts.yml. Si la sesión Premium se verifica, entra sin /login.
+  # La contraseña local no se borra: un nombre coincidente no demuestra
+  # que ambas identidades sean la misma persona.
+  # Nota: un cliente offline con un nombre Premium recibirá el challenge
+  # oficial y no podrá completar esa conexión; debe usar nombre offline.
+  auto-login-registered-premium: true
+
   # Después de /register o /login, avisa al dueño de una cuenta local cuando
   # su nick también existe como Premium y le ofrece usar /premium.
   premium-question: true
