@@ -3,7 +3,6 @@ package com.example.spigotauth;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
-import java.io.IOException;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
