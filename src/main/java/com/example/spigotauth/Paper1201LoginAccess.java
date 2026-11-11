@@ -4,41 +4,41 @@ import com.mojang.authlib.GameProfile;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Validated access to the exact Minecraft/Paper 1.20.1 login internals SLogin
- * needs. Resolution happens once at startup. If the runtime layout differs,
- * Smart Auth is disabled instead of corrupting the login pipeline.
+ * Validated access to the real Minecraft/Paper 1.20.1 login layout.
+ *
+ * 1.20.1 uses the legacy login state machine:
+ * HELLO -> KEY -> AUTHENTICATING -> READY_TO_ACCEPT -> DELAY_ACCEPT -> ACCEPTED.
  */
 final class Paper1201LoginAccess {
 
-    private static final Set<String> REQUIRED_STATES =
-            Set.of("HELLO", "KEY", "AUTHENTICATING", "VERIFYING");
+    private static final Set<String> REQUIRED_STATES = Set.of(
+            "HELLO",
+            "KEY",
+            "AUTHENTICATING",
+            "READY_TO_ACCEPT",
+            "DELAY_ACCEPT",
+            "ACCEPTED"
+    );
 
     private final Field state;
-    private final Field authenticatedProfile;
+    private final Field gameProfile;
     private final Field challenge;
     private final Field serverId;
-    private final Field requestedUsername;
-    private final Method startClientVerification;
 
     private Paper1201LoginAccess(Field state,
-                                 Field authenticatedProfile,
+                                 Field gameProfile,
                                  Field challenge,
-                                 Field serverId,
-                                 Field requestedUsername,
-                                 Method startClientVerification) {
+                                 Field serverId) {
         this.state = state;
-        this.authenticatedProfile = authenticatedProfile;
+        this.gameProfile = gameProfile;
         this.challenge = challenge;
         this.serverId = serverId;
-        this.requestedUsername = requestedUsername;
-        this.startClientVerification = startClientVerification;
     }
 
     static Paper1201LoginAccess resolve() throws ReflectiveOperationException {
@@ -48,7 +48,6 @@ final class Paper1201LoginAccess {
         Field profile = null;
         Field challenge = null;
         Field serverId = null;
-        Field requestedUsername = null;
 
         for (Field field : owner.getDeclaredFields()) {
             if (Modifier.isStatic(field.getModifiers())) continue;
@@ -59,62 +58,28 @@ final class Paper1201LoginAccess {
             if (type.isEnum() && containsRequiredStates(type)) {
                 state = unique(state, field, "login state");
             } else if (type == GameProfile.class) {
-                profile = unique(profile, field, "authenticated profile");
+                profile = unique(profile, field, "gameProfile");
             } else if (type == byte[].class && Modifier.isFinal(modifiers)) {
                 challenge = unique(challenge, field, "challenge");
             } else if (type == String.class && Modifier.isFinal(modifiers)) {
                 serverId = unique(serverId, field, "serverId");
-            } else if (type == String.class && !Modifier.isFinal(modifiers)) {
-                requestedUsername = unique(
-                        requestedUsername, field, "requestedUsername");
-            }
-        }
-
-        Method startVerification = null;
-        for (Method method : owner.getDeclaredMethods()) {
-            int modifiers = method.getModifiers();
-            Class<?>[] parameters = method.getParameterTypes();
-
-            // In 1.20.1 startClientVerification is package-private, returns
-            // void and accepts exactly one GameProfile. The other one-profile
-            // helpers are private.
-            if (!Modifier.isStatic(modifiers)
-                    && !Modifier.isPrivate(modifiers)
-                    && method.getReturnType() == void.class
-                    && parameters.length == 1
-                    && parameters[0] == GameProfile.class) {
-                if (startVerification != null) {
-                    throw new NoSuchMethodException(
-                            "Más de un startClientVerification compatible.");
-                }
-                startVerification = method;
             }
         }
 
         if (state == null) throw new NoSuchFieldException("1.20.1 login state");
-        if (profile == null) throw new NoSuchFieldException("authenticatedProfile");
+        if (profile == null) throw new NoSuchFieldException("gameProfile");
         if (challenge == null) throw new NoSuchFieldException("challenge");
         if (serverId == null) throw new NoSuchFieldException("serverId");
-        if (requestedUsername == null) {
-            throw new NoSuchFieldException("requestedUsername");
-        }
-        if (startVerification == null) {
-            throw new NoSuchMethodException("startClientVerification(GameProfile)");
-        }
 
-        for (Field field : new Field[]{
-                state, profile, challenge, serverId, requestedUsername}) {
+        for (Field field : new Field[]{state, profile, challenge, serverId}) {
             field.setAccessible(true);
         }
-        startVerification.setAccessible(true);
 
         return new Paper1201LoginAccess(
                 state,
                 profile,
                 challenge,
-                serverId,
-                requestedUsername,
-                startVerification
+                serverId
         );
     }
 
@@ -122,7 +87,8 @@ final class Paper1201LoginAccess {
             throws IllegalAccessException {
         byte[] value = (byte[]) challenge.get(login);
         if (value == null || value.length == 0) {
-            throw new IllegalStateException("Paper devolvió un challenge vacío.");
+            throw new IllegalStateException(
+                    "Paper devolvió un challenge vacío.");
         }
         return value.clone();
     }
@@ -133,11 +99,14 @@ final class Paper1201LoginAccess {
         return value == null ? "" : value;
     }
 
-    void initializeHello(ServerLoginPacketListenerImpl login,
-                         String username)
+    /**
+     * Mirrors the minimum online-mode branch of vanilla handleHello in 1.20.1.
+     * The UUID remains null until Mojang hasJoinedServer proves ownership.
+     */
+    void beginKeyExchange(ServerLoginPacketListenerImpl login,
+                          String username)
             throws ReflectiveOperationException {
-        requestedUsername.set(login, username);
-        authenticatedProfile.set(login, null);
+        gameProfile.set(login, new GameProfile(null, username));
         setState(login, "KEY");
     }
 
@@ -146,10 +115,16 @@ final class Paper1201LoginAccess {
         setState(login, "AUTHENTICATING");
     }
 
-    void startClientVerification(ServerLoginPacketListenerImpl login,
-                                 GameProfile verifiedProfile)
+    /**
+     * Hands a fully Mojang-verified profile back to the legacy 1.20.1 tick
+     * state machine. The server thread will then perform bans/whitelist/full
+     * server/duplicate checks and complete the normal login.
+     */
+    void readyToAccept(ServerLoginPacketListenerImpl login,
+                       GameProfile verifiedProfile)
             throws ReflectiveOperationException {
-        startClientVerification.invoke(login, verifiedProfile);
+        gameProfile.set(login, verifiedProfile);
+        setState(login, "READY_TO_ACCEPT");
     }
 
     boolean supportsState(String stateName) {
@@ -176,7 +151,9 @@ final class Paper1201LoginAccess {
         return names.containsAll(REQUIRED_STATES);
     }
 
-    private static Field unique(Field current, Field candidate, String label)
+    private static Field unique(Field current,
+                                Field candidate,
+                                String label)
             throws NoSuchFieldException {
         if (current != null) {
             throw new NoSuchFieldException(
