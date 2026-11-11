@@ -326,7 +326,19 @@ jobs:
             exit 1
           fi
 
-          kill "$SERVER_PID" 2>/dev/null || true
+          # Paper shutdown can block indefinitely on chunk IO / worker
+          # threads in CI. Graceful shutdown first, then enforce a deadline.
+          kill -TERM "$SERVER_PID" 2>/dev/null || true
+          for _ in $(seq 1 30); do
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          if kill -0 "$SERVER_PID" 2>/dev/null; then
+            echo "Paper CI shutdown exceeded 30 seconds; terminating test JVM."
+            kill -KILL "$SERVER_PID" 2>/dev/null || true
+          fi
           wait "$SERVER_PID" 2>/dev/null || true
 
           cat server.log
