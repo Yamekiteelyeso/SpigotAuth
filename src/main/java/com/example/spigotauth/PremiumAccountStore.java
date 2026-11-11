@@ -79,6 +79,7 @@ public final class PremiumAccountStore {
         String base = path(verifiedUuid);
         String oldName = data.getString(base + ".name");
         String oldFirstSeen = data.getString(base + ".first-seen");
+        String oldLastSeen = data.getString(base + ".last-seen");
         String newNameKey = namePath(verifiedName);
         String oldNewBinding = data.getString(newNameKey);
         String oldNameKey = oldName == null ? null : namePath(oldName);
@@ -109,6 +110,7 @@ public final class PremiumAccountStore {
         } catch (IOException exception) {
             data.set(base + ".name", oldName);
             data.set(base + ".first-seen", oldFirstSeen);
+            data.set(base + ".last-seen", oldLastSeen);
             data.set(newNameKey, oldNewBinding);
             if (oldNameKey != null) data.set(oldNameKey, oldPreviousBinding);
             logger.severe("No se pudo guardar premium-accounts.yml: " + exception.getMessage());
