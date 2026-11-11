@@ -8,7 +8,6 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
 import java.io.File;
-import java.util.Locale;
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -129,6 +128,11 @@ public final class LoginLocationStore {
 
     public synchronized boolean set(Spot spot, Location location) {
         return write(spot, SavedLocation.of(location));
+    }
+
+    public synchronized boolean save(Spot spot, SavedLocation location) {
+        if (location == null) return false;
+        return write(spot, location);
     }
 
     public synchronized boolean clear(Spot spot) {
