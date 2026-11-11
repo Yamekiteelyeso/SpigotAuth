@@ -87,6 +87,12 @@ public final class AccountManagementCommand implements CommandExecutor {
             return true;
         }
 
+        UUID pending = plugin.getPremiumPreferences().expectedUuid(name);
+        if (pending != null && !plugin.getPremiumPreferences().isVerified(name)) {
+            plugin.getMessages().send(player, "premium.command-pending");
+            return true;
+        }
+
         // /premium is a migration command for an existing LOCAL account.
         // A fresh/unregistered player cannot use it as a shortcut around /register.
         if (!plugin.getAccounts().isRegistered(name)) {
