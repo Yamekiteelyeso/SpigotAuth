@@ -88,6 +88,7 @@ public final class SpigotAuth extends JavaPlugin {
 
     public void reloadSLoginConfiguration() {
         reloadConfig();
+        if (loginLocations != null) loginLocations.reload();
 
         if (premium != null) {
             premium.setCacheMillis(
