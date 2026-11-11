@@ -20,6 +20,98 @@ jobs:
           gradle-version: '8.5'
       - name: Build and test
         run: gradle --no-daemon clean build
+
+      - name: Boot-test Paper 1.20.1 with online-mode=false
+        shell: bash
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+
+          SERVER_DIR="$PWD/build/paper-integration"
+          mkdir -p "$SERVER_DIR/plugins"
+
+          USER_AGENT="SLogin-CI/1.0 (https://github.com/Yamekiteelyeso/SpigotAuth)"
+          BUILDS=$(curl -fsSL \
+            -H "User-Agent: $USER_AGENT" \
+            "https://fill.papermc.io/v3/projects/paper/versions/1.20.1/builds")
+
+          PAPER_URL=$(echo "$BUILDS" | jq -r \
+            'first(.[] | select(.channel == "STABLE") | .downloads."server:default".url) // empty')
+
+          if [ -z "$PAPER_URL" ]; then
+            echo "No stable Paper 1.20.1 build was returned by PaperMC."
+            exit 1
+          fi
+
+          curl -fL \
+            -H "User-Agent: $USER_AGENT" \
+            "$PAPER_URL" \
+            -o "$SERVER_DIR/paper.jar"
+
+          echo "eula=true" > "$SERVER_DIR/eula.txt"
+
+          cat > "$SERVER_DIR/server.properties" <<'EOF'
+          online-mode=false
+          server-port=25579
+          max-players=2
+          view-distance=2
+          simulation-distance=2
+          spawn-protection=0
+          enable-query=false
+          enable-rcon=false
+          motd=SLogin CI
+          EOF
+
+          PLUGIN_JAR=$(find build/libs -maxdepth 1 -type f \
+            -name '*.jar' \
+            ! -name '*-dev.jar' \
+            ! -name '*-sources.jar' \
+            | head -n 1)
+
+          if [ -z "$PLUGIN_JAR" ]; then
+            echo "No runnable SLogin jar was produced."
+            exit 1
+          fi
+
+          cp "$PLUGIN_JAR" "$SERVER_DIR/plugins/SLogin.jar"
+
+          cd "$SERVER_DIR"
+          tail -f /dev/null | java -Xms512M -Xmx1G -jar paper.jar nogui \
+            > server.log 2>&1 &
+          SERVER_PID=$!
+
+          READY=0
+          for _ in $(seq 1 120); do
+            if grep -q 'Done (' server.log 2>/dev/null; then
+              READY=1
+              break
+            fi
+
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              break
+            fi
+
+            sleep 1
+          done
+
+          kill "$SERVER_PID" 2>/dev/null || true
+          wait "$SERVER_PID" 2>/dev/null || true
+
+          cat server.log
+
+          if [ "$READY" -ne 1 ]; then
+            echo "Paper did not reach the ready state."
+            exit 1
+          fi
+
+          grep -q "SLogin v1.4.0" server.log
+          grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
+
+          if grep -E "Error occurred while enabling SLogin|Could not load.*SLogin|\[SLogin\].*(SEVERE|ERROR)" server.log; then
+            echo "SLogin emitted a runtime error during the Paper boot test."
+            exit 1
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: SLogin-1.4.0
