@@ -18,6 +18,10 @@ premium-cache-minutes: 10
 smart-auth:
   enabled: true
 
+  # Muestra en consola cada etapa del handshake Premium.
+  # Úsalo para diagnosticar builds específicas de Paper.
+  debug: false
+
   # Paper 1.20.1 únicamente.
   # Cuando un nombre corresponde a una cuenta Premium, SLogin inicia el
   # challenge oficial de cifrado y deja que el login vanilla valide la sesión.
@@ -72,6 +76,7 @@ messages:
         - "&bRegistro requerido"
         - "&7Crea una contraseña con:"
         - "&f/register <contraseña> <confirmar>"
+        - "&7También puedes usar &f/r <contraseña> <confirmar>"
         - "&7Tienes &f{seconds}s &7para autenticarte."
         - "&8&m--------------------------------"
       already-registered: "{prefix}&eYa estás registrado. Usa &f/login <contraseña>&e."
@@ -137,6 +142,7 @@ messages:
         - "&bRegistration required"
         - "&7Create a password with:"
         - "&f/register <password> <confirm>"
+        - "&7You can also use &f/r <password> <confirm>"
         - "&7You have &f{seconds}s &7to authenticate."
         - "&8&m--------------------------------"
       already-registered: "{prefix}&eYou are already registered. Use &f/login <password>&e."
