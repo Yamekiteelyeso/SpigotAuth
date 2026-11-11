@@ -94,6 +94,17 @@ jobs:
             jeb_: "placeholder-hash-not-used-by-this-protocol-smoke-test"
           EOF
 
+          # /premium must challenge without a successful public nickname lookup.
+          # This represents a LOCAL registered account that requested migration.
+          cat >> "$SERVER_DIR/plugins/SLogin/accounts.yml" <<'EOF'
+            PremiumPending: "placeholder-hash-not-used-by-this-protocol-smoke-test"
+          EOF
+          cat >> "$SERVER_DIR/plugins/SLogin/premium-preferences.yml" <<'EOF'
+            premiumpending:
+              verified: false
+              pending: true
+          EOF
+
           cd "$SERVER_DIR"
           tail -f /dev/null | java -Xms512M -Xmx1G -jar paper.jar nogui \
             > server.log 2>&1 &
@@ -245,6 +256,32 @@ jobs:
                   f"challenge={len(challenge)} bytes)."
               )
 
+          # Pending /premium with no public UUID lookup must send the exact
+          # same official Encryption Request and never bypass session proof.
+          with socket.create_connection((HOST, PORT), timeout=10) as sock:
+              sock.settimeout(10)
+              handshake = (
+                  varint(0x00)
+                  + varint(PROTOCOL)
+                  + mc_string(HOST)
+                  + struct.pack(">H", PORT)
+                  + varint(2)
+              )
+              send_packet(sock, handshake)
+              send_packet(
+                  sock,
+                  varint(0x00) + mc_string("PremiumPending") + b"\x00"
+              )
+              packet_length = read_varint(sock)
+              payload = recv_exact(sock, packet_length)
+              packet_id, _ = decode_varint(payload)
+              if packet_id != 0x01:
+                  raise SystemExit(
+                      f"Pending /premium expected Encryption Request 0x01, "
+                      f"got 0x{packet_id:02x}"
+                  )
+              print("SLogin /premium smoke test: pending user receives Encryption Request.")
+
           # A local registered account must remain on the offline/password
           # path even when its nickname belongs to a real Premium account.
           with socket.create_connection((HOST, PORT), timeout=10) as sock:
@@ -278,7 +315,7 @@ jobs:
               )
           PY
 
-          grep -q "SLogin v1.5.0" server.log
+          grep -q "SLogin v1.6.0" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
 
           if grep -E "Error occurred while enabling SLogin|Could not load.*SLogin|\[SLogin\].*(SEVERE|ERROR)" server.log; then
@@ -289,13 +326,25 @@ jobs:
             exit 1
           fi
 
-          kill "$SERVER_PID" 2>/dev/null || true
+          # Paper shutdown can block indefinitely on chunk IO / worker
+          # threads in CI. Graceful shutdown first, then enforce a deadline.
+          kill -TERM "$SERVER_PID" 2>/dev/null || true
+          for _ in $(seq 1 30); do
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          if kill -0 "$SERVER_PID" 2>/dev/null; then
+            echo "Paper CI shutdown exceeded 30 seconds; terminating test JVM."
+            kill -KILL "$SERVER_PID" 2>/dev/null || true
+          fi
           wait "$SERVER_PID" 2>/dev/null || true
 
           cat server.log
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SLogin-1.5.0
-          path: build/libs/SLogin-1.5.0.jar
+          name: SLogin-1.6.0
+          path: build/libs/SLogin-1.6.0.jar
           if-no-files-found: error

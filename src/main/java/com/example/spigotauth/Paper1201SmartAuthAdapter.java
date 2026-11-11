@@ -212,8 +212,9 @@ public final class Paper1201SmartAuthAdapter {
                 expected = plugin.getPremiumPreferences().expectedUuid(name);
             }
 
-            if (expected != null) {
-                debug("Challenge directo para " + name + " -> " + expected);
+            if (expected != null || plugin.getPremiumPreferences().isPending(name)) {
+                debug("Verificación Premium obligatoria para " + name
+                        + (expected == null ? " (migración pendiente)" : " -> " + expected));
                 startChallengeOrFail(hello, expected);
                 return;
             }
@@ -286,7 +287,11 @@ public final class Paper1201SmartAuthAdapter {
         private void beginPremiumChallenge(ServerboundHelloPacket hello,
                                            UUID expectedUuid)
                 throws ReflectiveOperationException {
-            if (expectedUuid == null) {
+            // Pending /premium migration has no expected UUID yet. It must
+            // still prove the official session and the exact username before
+            // the verified UUID is stored. Other paths require a known UUID.
+            if (expectedUuid == null
+                    && !plugin.getPremiumPreferences().isPending(hello.name())) {
                 throw new IllegalStateException("No existe UUID Premium esperado.");
             }
 
@@ -426,7 +431,8 @@ public final class Paper1201SmartAuthAdapter {
             if (verified == null
                     || verified.getId() == null
                     || verified.getName() == null
-                    || !verified.getId().equals(attempt.expectedUuid())
+                    || (attempt.expectedUuid() != null
+                        && !verified.getId().equals(attempt.expectedUuid()))
                     || !verified.getName().equalsIgnoreCase(attempt.name())) {
                 failPremium(
                         attempt.name(),
@@ -473,9 +479,7 @@ public final class Paper1201SmartAuthAdapter {
         }
 
         private void failPremium(String name, Throwable failure) {
-            if (name != null
-                    && plugin.getPremiumPreferences().expectedUuid(name) != null
-                    && !plugin.getPremiumPreferences().isVerified(name)) {
+            if (name != null && plugin.getPremiumPreferences().isPending(name)) {
                 plugin.getPremiumPreferences().clear(name);
                 debug("Migración Premium pendiente revertida para " + name);
             }
