@@ -1,6 +1,5 @@
 package com.example.spigotauth;
 
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -31,8 +30,7 @@ public final class AuthManager {
         authenticated.add(id);
         failures.remove(id);
         cancelTimeout(id);
-        player.sendMessage(ChatColor.GREEN + "✔ " + ChatColor.WHITE
-                + "¡Autenticación completada! " + ChatColor.GRAY + "Ya puedes jugar.");
+
     }
 
     public void clear(Player player) {
@@ -75,11 +73,11 @@ public final class AuthManager {
             long lockMillis = Math.multiplyExact(minutes, 60_000L);
             locked.put(normalize(player.getName()), System.currentTimeMillis() + lockMillis);
             failures.remove(player.getUniqueId());
-            player.kickPlayer(ChatColor.RED + "Has agotado los intentos de acceso. "
-                    + "Vuelve a intentarlo en " + minutes + " minutos.");
+            player.kickPlayer(plugin.getMessages().format("auth.locked-kick",
+                    Map.of("minutes", minutes)));
         } else {
-            player.sendMessage(ChatColor.RED + "Contraseña incorrecta. "
-                    + ChatColor.GRAY + "Intentos restantes: " + (max - count) + ".");
+            plugin.getMessages().send(player, "auth.wrong-password",
+                    Map.of("remaining", max - count));
         }
     }
 
@@ -92,8 +90,7 @@ public final class AuthManager {
             timeoutTasks.remove(playerId);
             if (player.isOnline() && player.getUniqueId().equals(playerId)
                     && !isAuthenticated(player)) {
-                player.kickPlayer(ChatColor.RED + "Se agotó el tiempo para iniciar sesión. "
-                        + "Vuelve a entrar e inténtalo de nuevo.");
+                player.kickPlayer(plugin.getMessages().raw("auth.timeout-kick"));
             }
         }, Math.multiplyExact(seconds, 20L));
         timeoutTasks.put(playerId, task);
