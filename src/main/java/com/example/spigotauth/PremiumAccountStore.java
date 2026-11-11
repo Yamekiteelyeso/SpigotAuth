@@ -34,6 +34,10 @@ public final class PremiumAccountStore {
         return "premium." + uuid;
     }
 
+    private static String namePath(String name) {
+        return "names." + name.toLowerCase(Locale.ROOT);
+    }
+
     public synchronized boolean isRegistered(UUID uuid) {
         return data.contains(path(uuid));
     }
@@ -43,8 +47,28 @@ public final class PremiumAccountStore {
     }
 
     /**
+     * Returns the verified premium UUID previously bound to this name, if any.
+     * This index is intended for fail-closed impersonation protection.
+     */
+    public synchronized UUID findVerifiedUuidByName(String name) {
+        if (name == null) return null;
+        String raw = data.getString(namePath(name));
+        if (raw == null) return null;
+        try {
+            return UUID.fromString(raw);
+        } catch (IllegalArgumentException exception) {
+            logger.warning("Binding Premium inválido para el nombre " + name + ".");
+            return null;
+        }
+    }
+
+    public synchronized boolean isProtectedName(String name) {
+        return findVerifiedUuidByName(name) != null;
+    }
+
+    /**
      * Creates a record on first verified login or updates the last known name.
-     * Returns false if persistence fails.
+     * The reverse name index is updated only from a session-verified identity.
      */
     public synchronized boolean ensureAccount(UUID verifiedUuid, String verifiedName) {
         if (verifiedUuid == null || verifiedName == null
@@ -55,11 +79,29 @@ public final class PremiumAccountStore {
         String base = path(verifiedUuid);
         String oldName = data.getString(base + ".name");
         String oldFirstSeen = data.getString(base + ".first-seen");
+        String newNameKey = namePath(verifiedName);
+        String oldNewBinding = data.getString(newNameKey);
+        String oldNameKey = oldName == null ? null : namePath(oldName);
+        String oldPreviousBinding = oldNameKey == null ? null : data.getString(oldNameKey);
+
+        UUID existing = findVerifiedUuidByName(verifiedName);
+        if (existing != null && !existing.equals(verifiedUuid)) {
+            logger.severe("Conflicto de identidad Premium: " + verifiedName
+                    + " ya está vinculado a otro UUID verificado.");
+            return false;
+        }
+
         data.set(base + ".name", verifiedName);
         if (oldFirstSeen == null) {
             data.set(base + ".first-seen", Instant.now().toString());
         }
         data.set(base + ".last-seen", Instant.now().toString());
+        data.set(newNameKey, verifiedUuid.toString());
+
+        if (oldNameKey != null && !oldNameKey.equals(newNameKey)
+                && verifiedUuid.toString().equals(oldPreviousBinding)) {
+            data.set(oldNameKey, null);
+        }
 
         try {
             data.save(file);
@@ -67,6 +109,8 @@ public final class PremiumAccountStore {
         } catch (IOException exception) {
             data.set(base + ".name", oldName);
             data.set(base + ".first-seen", oldFirstSeen);
+            data.set(newNameKey, oldNewBinding);
+            if (oldNameKey != null) data.set(oldNameKey, oldPreviousBinding);
             logger.severe("No se pudo guardar premium-accounts.yml: " + exception.getMessage());
             return false;
         }
