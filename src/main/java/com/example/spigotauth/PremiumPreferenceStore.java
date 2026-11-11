@@ -3,7 +3,6 @@ package com.example.spigotauth;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -65,15 +64,11 @@ public final class PremiumPreferenceStore {
         if (old == null) return true;
 
         data.set(path, null);
-        try {
-            data.save(file);
+        if (AtomicYamlFile.save(data, file, logger, "premium-preferences.yml")) {
             return true;
-        } catch (IOException exception) {
-            data.set(path, old);
-            logger.severe("No se pudo limpiar la preferencia Premium de "
-                    + name + ": " + exception.getMessage());
-            return false;
         }
+        data.set(path, old);
+        return false;
     }
 
     private boolean write(String name, UUID uuid, boolean verified) {
