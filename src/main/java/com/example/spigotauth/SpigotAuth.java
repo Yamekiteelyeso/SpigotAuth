@@ -3,7 +3,6 @@ package com.example.spigotauth;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
-import java.time.Duration;
 
 public final class SpigotAuth extends JavaPlugin {
 
@@ -14,7 +13,6 @@ public final class SpigotAuth extends JavaPlugin {
     private PremiumAuthService premiumAuth;
     private PremiumPreferenceStore premiumPreferences;
     private PreAuthGuard preAuthGuard;
-    private MinecraftSessionService sessionService;
     private Paper1201SmartAuthAdapter smartAuthAdapter;
     private MessageService messages;
 
@@ -36,10 +34,6 @@ public final class SpigotAuth extends JavaPlugin {
                 new File(getDataFolder(), "premium-preferences.yml"), getLogger());
         premiumAuth = new PremiumAuthService(
                 this, premiumAccounts, premiumPreferences, accounts, auth);
-        long sessionTimeoutMs = Math.max(1000L,
-                getConfig().getLong("smart-auth.session-timeout-ms", 5000L));
-        sessionService = new MinecraftSessionService(Duration.ofMillis(sessionTimeoutMs));
-
         getServer().getPluginManager().registerEvents(new AuthListener(this), this);
 
         if (!getServer().getOnlineMode() && getConfig().getBoolean("smart-auth.enabled", true)) {
@@ -95,10 +89,6 @@ public final class SpigotAuth extends JavaPlugin {
 
     public PremiumAuthService getPremiumAuth() {
         return premiumAuth;
-    }
-
-    public MinecraftSessionService getSessionService() {
-        return sessionService;
     }
 
     public Paper1201SmartAuthAdapter getSmartAuthAdapter() {
