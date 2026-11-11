@@ -3,7 +3,6 @@ package com.example.spigotauth;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Locale;
 import java.util.logging.Logger;
 
@@ -35,14 +34,11 @@ public final class AccountStore {
         if (isRegistered(name)) return false;
         String path = key(name);
         config.set(path, PasswordUtil.hash(password));
-        try {
-            config.save(file);
+        if (AtomicYamlFile.save(config, file, logger, "accounts.yml")) {
             return true;
-        } catch (IOException exception) {
-            config.set(path, null);
-            logger.severe("No se pudo guardar accounts.yml: " + exception.getMessage());
-            return false;
         }
+        config.set(path, null);
+        return false;
     }
 
     public synchronized boolean check(String name, String password) {
@@ -57,14 +53,11 @@ public final class AccountStore {
 
         String replacement = PasswordUtil.hash(newPassword);
         config.set(path, replacement);
-        try {
-            config.save(file);
+        if (AtomicYamlFile.save(config, file, logger, "accounts.yml")) {
             return true;
-        } catch (IOException exception) {
-            config.set(path, stored);
-            logger.severe("No se pudo actualizar accounts.yml: " + exception.getMessage());
-            return false;
         }
+        config.set(path, stored);
+        return false;
     }
 
     public synchronized boolean remove(String name) {
@@ -73,14 +66,10 @@ public final class AccountStore {
         if (old == null) return true;
 
         config.set(path, null);
-        try {
-            config.save(file);
+        if (AtomicYamlFile.save(config, file, logger, "accounts.yml")) {
             return true;
-        } catch (IOException exception) {
-            config.set(path, old);
-            logger.severe("No se pudo eliminar la cuenta local de " + name + ": "
-                    + exception.getMessage());
-            return false;
         }
+        config.set(path, old);
+        return false;
     }
 }
