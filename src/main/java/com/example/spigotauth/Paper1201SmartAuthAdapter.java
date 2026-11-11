@@ -141,7 +141,7 @@ public final class Paper1201SmartAuthAdapter {
                         case UNAVAILABLE -> {
                             if (plugin.getPremiumAccounts().isProtectedName(name)) {
                                 connection.disconnect(Component.literal(
-                                        "No se pudo verificar tu cuenta Premium. Inténtalo de nuevo."));
+                                        plugin.getMessages().raw("premium.verification-unavailable")));
                             } else {
                                 ctx.fireChannelRead(msg);
                                 ctx.channel().config().setAutoRead(true);
@@ -154,7 +154,7 @@ public final class Paper1201SmartAuthAdapter {
                     logger.warning("Smart Auth rechazó " + name + ": "
                             + failure.getClass().getSimpleName());
                     connection.disconnect(Component.literal(
-                            "No se pudo iniciar la verificación Premium."));
+                            plugin.getMessages().raw("premium.verification-start-error")));
                 }
             }));
         }
@@ -162,7 +162,8 @@ public final class Paper1201SmartAuthAdapter {
         private void beginVanillaChallenge(ServerboundHelloPacket hello, UUID discoveredUuid)
                 throws ReflectiveOperationException {
             if (!(connection.getPacketListener() instanceof ServerLoginPacketListenerImpl login)) {
-                connection.disconnect(Component.literal("Estado de login no compatible."));
+                connection.disconnect(Component.literal(
+                        plugin.getMessages().raw("premium.incompatible-login-state")));
                 return;
             }
 

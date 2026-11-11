@@ -1,6 +1,5 @@
 package com.example.spigotauth;
 
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
 import java.util.Objects;
@@ -34,14 +33,15 @@ public final class PremiumAuthService {
         Objects.requireNonNull(profile, "profile");
 
         if (!accounts.ensureAccount(profile.uuid(), profile.name())) {
-            player.kickPlayer(ChatColor.RED
-                    + "No se pudo guardar tu identidad Premium. Inténtalo más tarde.");
+            player.kickPlayer(player.getServer().getPluginManager()
+                    .getPlugin("SpigotAuth") instanceof SpigotAuth plugin
+                    ? plugin.getMessages().raw("premium.save-error")
+                    : "No se pudo guardar tu identidad Premium.");
             return false;
         }
 
         auth.markAuthenticated(player);
-        player.sendMessage(ChatColor.GOLD + "★ " + ChatColor.WHITE
-                + "Cuenta Premium verificada: " + ChatColor.YELLOW + profile.name());
+
         return true;
     }
 }

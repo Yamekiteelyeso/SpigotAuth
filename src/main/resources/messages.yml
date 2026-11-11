@@ -1,0 +1,54 @@
+# Todos los mensajes visibles de SpigotAuth se pueden editar aquí.
+# Colores legacy: &a &b &c &e &7 &8 &f &6, etc.
+# Placeholders comunes: {player}, {seconds}, {minutes}, {remaining}, {min}, {max}.
+
+prefix: "&8[&bSpigotAuth&8] &r"
+
+premium:
+  verified:
+    - "&8&m--------------------------------"
+    - "&a✔ &fCuenta Premium verificada."
+    - "&7Bienvenido, &b{player}&7. Entraste automáticamente."
+    - "&8&m--------------------------------"
+  save-error: "&cNo pudimos guardar tu identidad Premium. Inténtalo de nuevo."
+  verification-unavailable: "&cNo pudimos verificar tu cuenta Premium ahora mismo. Inténtalo de nuevo."
+  verification-start-error: "&cNo pudimos iniciar la verificación Premium."
+  incompatible-login-state: "&cTu conexión llegó en un estado de login no compatible."
+
+auth:
+  already-authenticated: "{prefix}&aYa estás autenticado."
+  registered: "{prefix}&a✔ Cuenta creada. Ya puedes jugar."
+  logged-in: "{prefix}&a✔ Sesión iniciada. Bienvenido de vuelta."
+  wrong-password: "{prefix}&cContraseña incorrecta. &7Intentos restantes: &f{remaining}&7."
+  locked: "{prefix}&cDemasiados intentos. &7Espera &f{seconds}s&7."
+  locked-kick: "&cDemasiados intentos de acceso.\n&7Vuelve a intentarlo en &f{minutes} minutos&7."
+  timeout-kick: "&cTiempo de autenticación agotado.\n&7Vuelve a entrar para intentarlo otra vez."
+  chat-blocked: "{prefix}&cAutentícate antes de usar el chat."
+  command-blocked: "{prefix}&cAutentícate antes de usar otros comandos."
+
+register:
+  prompt:
+    - "&8&m--------------------------------"
+    - "&bRegistro requerido"
+    - "&7Crea una contraseña con:"
+    - "&f/register <contraseña> <confirmar>"
+    - "&7Tienes &f{seconds}s &7para autenticarte."
+    - "&8&m--------------------------------"
+  already-registered: "{prefix}&eYa estás registrado. Usa &f/login <contraseña>&e."
+  usage: "{prefix}&eUso: &f/register <contraseña> <confirmar>"
+  length: "{prefix}&cLa contraseña debe tener entre &f{min}&c y &f{max}&c caracteres."
+  mismatch: "{prefix}&cLas contraseñas no coinciden."
+  save-error: "{prefix}&cNo pudimos guardar tu cuenta. Contacta a un administrador."
+
+login:
+  prompt:
+    - "&8&m--------------------------------"
+    - "&bInicio de sesión"
+    - "&7Usa &f/login <contraseña>"
+    - "&7Tienes &f{seconds}s &7para autenticarte."
+    - "&8&m--------------------------------"
+  not-registered: "{prefix}&eNo estás registrado. Usa &f/register <contraseña> <confirmar>&e."
+  usage: "{prefix}&eUso: &f/login <contraseña>"
+
+console:
+  player-only: "{prefix}&cEste comando solo se puede usar dentro del juego."
