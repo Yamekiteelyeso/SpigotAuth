@@ -19,6 +19,8 @@ public final class SpigotAuth extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        getConfig().options().copyDefaults(true);
+        saveConfig();
         messages = new MessageService(this);
 
         accounts = new AccountStore(new File(getDataFolder(), "accounts.yml"), getLogger());
