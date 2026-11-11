@@ -99,11 +99,12 @@ final class Paper1201LoginAccess {
     }
 
     void initializeHello(ServerLoginPacketListenerImpl login,
-                         String username,
-                         GameProfile candidate)
+                         String username)
             throws ReflectiveOperationException {
         requestedUsername.set(login, username);
-        authenticatedProfile.set(login, candidate);
+        // Do not inject an unverified GameProfile here. The Mojang profile is
+        // written only after hasJoined succeeds.
+        authenticatedProfile.set(login, null);
         setState(login, "KEY");
     }
 
