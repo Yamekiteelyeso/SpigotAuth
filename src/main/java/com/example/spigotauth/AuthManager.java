@@ -3,6 +3,7 @@ package com.example.spigotauth;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.net.InetSocketAddress;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -29,6 +30,7 @@ public final class AuthManager {
         UUID id = player.getUniqueId();
         authenticated.add(id);
         failures.remove(id);
+        locked.remove(lockKey(player));
         cancelTimeout(id);
         plugin.getPreAuthGuard().deactivate(player);
     }
@@ -49,12 +51,14 @@ public final class AuthManager {
         }
         authenticated.clear();
         failures.clear();
+        locked.clear();
     }
 
-    public boolean isLocked(String name) {
-        String key = normalize(name);
+    public boolean isLocked(Player player) {
+        String key = lockKey(player);
         Long until = locked.get(key);
         if (until == null) return false;
+
         if (System.currentTimeMillis() >= until) {
             locked.remove(key, until);
             return false;
@@ -62,41 +66,88 @@ public final class AuthManager {
         return true;
     }
 
-    public long remainingLockSeconds(String name) {
-        Long until = locked.get(normalize(name));
+    public long remainingLockSeconds(Player player) {
+        String key = lockKey(player);
+        Long until = locked.get(key);
         if (until == null) return 0L;
-        return Math.max(0L, (until - System.currentTimeMillis() + 999L) / 1000L);
+
+        if (System.currentTimeMillis() >= until) {
+            locked.remove(key, until);
+            return 0L;
+        }
+
+        return Math.max(
+                0L,
+                (until - System.currentTimeMillis() + 999L) / 1000L
+        );
     }
 
     public void registerFailure(Player player) {
-        int max = Math.max(1, plugin.getConfig().getInt("security.max-attempts", 5));
-        int count = failures.merge(player.getUniqueId(), 1, Integer::sum);
+        int max = Math.max(
+                1,
+                plugin.getConfig().getInt("security.max-attempts", 5)
+        );
+
+        int count = failures.merge(
+                player.getUniqueId(),
+                1,
+                Integer::sum
+        );
 
         if (count >= max) {
-            long minutes = Math.max(1L, plugin.getConfig().getLong("security.lock-minutes", 5));
+            long minutes = Math.max(
+                    1L,
+                    plugin.getConfig().getLong("security.lock-minutes", 5)
+            );
+
             long lockMillis = Math.multiplyExact(minutes, 60_000L);
-            locked.put(normalize(player.getName()), System.currentTimeMillis() + lockMillis);
+            locked.put(
+                    lockKey(player),
+                    System.currentTimeMillis() + lockMillis
+            );
             failures.remove(player.getUniqueId());
-            player.kickPlayer(plugin.getMessages().format("auth.locked-kick",
-                    Map.of("minutes", minutes)));
+
+            player.kickPlayer(
+                    plugin.getMessages().format(
+                            "auth.locked-kick",
+                            Map.of("minutes", minutes)
+                    )
+            );
         } else {
-            plugin.getMessages().send(player, "auth.wrong-password",
-                    Map.of("remaining", max - count));
+            plugin.getMessages().send(
+                    player,
+                    "auth.wrong-password",
+                    Map.of("remaining", max - count)
+            );
         }
     }
 
     public void startTimeout(Player player) {
-        long seconds = Math.max(10L, plugin.getConfig().getLong("security.login-timeout-seconds", 60));
+        long seconds = Math.max(
+                10L,
+                plugin.getConfig().getLong(
+                        "security.login-timeout-seconds",
+                        60
+                )
+        );
+
         UUID playerId = player.getUniqueId();
         cancelTimeout(playerId);
 
-        BukkitTask task = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            timeoutTasks.remove(playerId);
-            if (player.isOnline() && player.getUniqueId().equals(playerId)
-                    && !isAuthenticated(player)) {
-                player.kickPlayer(plugin.getMessages().raw("auth.timeout-kick"));
-            }
-        }, Math.multiplyExact(seconds, 20L));
+        BukkitTask task = plugin.getServer()
+                .getScheduler()
+                .runTaskLater(plugin, () -> {
+                    timeoutTasks.remove(playerId);
+
+                    if (player.isOnline()
+                            && player.getUniqueId().equals(playerId)
+                            && !isAuthenticated(player)) {
+                        player.kickPlayer(
+                                plugin.getMessages().raw("auth.timeout-kick")
+                        );
+                    }
+                }, Math.multiplyExact(seconds, 20L));
+
         timeoutTasks.put(playerId, task);
     }
 
@@ -105,7 +156,24 @@ public final class AuthManager {
         if (task != null) task.cancel();
     }
 
-    private static String normalize(String name) {
-        return name.toLowerCase(Locale.ROOT);
+    static String lockKey(String name, String address) {
+        String normalizedName = name == null
+                ? ""
+                : name.toLowerCase(Locale.ROOT);
+
+        String normalizedAddress = address == null || address.isBlank()
+                ? "unknown"
+                : address;
+
+        return normalizedName + "|" + normalizedAddress;
+    }
+
+    private static String lockKey(Player player) {
+        InetSocketAddress address = player.getAddress();
+        String host = address == null || address.getAddress() == null
+                ? "unknown"
+                : address.getAddress().getHostAddress();
+
+        return lockKey(player.getName(), host);
     }
 }
