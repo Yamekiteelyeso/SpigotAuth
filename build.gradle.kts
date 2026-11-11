@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.example"
-version = "1.2.0"
+version = "1.3.0"
 
 repositories {
     mavenCentral()
@@ -25,8 +25,8 @@ tasks.test {
 }
 
 tasks.jar {
-    archiveBaseName.set("SpigotAuth")
-    archiveVersion.set("1.2.0")
+    archiveBaseName.set("SLogin")
+    archiveVersion.set("1.3.0")
 }
 
 tasks.assemble {
