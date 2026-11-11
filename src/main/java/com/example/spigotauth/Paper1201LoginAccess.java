@@ -80,8 +80,6 @@ final class Paper1201LoginAccess {
             // helpers are private.
             if (!Modifier.isStatic(modifiers)
                     && !Modifier.isPrivate(modifiers)
-                    && !Modifier.isPublic(modifiers)
-                    && !Modifier.isProtected(modifiers)
                     && method.getReturnType() == void.class
                     && parameters.length == 1
                     && parameters[0] == GameProfile.class) {
