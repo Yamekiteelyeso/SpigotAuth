@@ -37,23 +37,24 @@ public final class SpigotAuth extends JavaPlugin {
         if (!getServer().getOnlineMode() && getConfig().getBoolean("smart-auth.enabled", true)) {
             smartAuthAdapter = new Paper1201SmartAuthAdapter(this);
             if (!smartAuthAdapter.enable()) {
-                getLogger().severe("Smart Authentication no pudo activarse; se mantiene el login local.");
+                getLogger().severe("SLogin Smart Authentication no pudo activarse; se mantiene el login local.");
                 smartAuthAdapter = null;
             }
         }
 
         AuthCommand executor = new AuthCommand(this);
-        if (getCommand("register") == null || getCommand("login") == null) {
-            getLogger().severe("Faltan los comandos register/login en plugin.yml. Desactivando SpigotAuth.");
+        if (getCommand("register") == null || getCommand("login") == null || getCommand("slogin") == null) {
+            getLogger().severe("Faltan comandos en plugin.yml. Desactivando SLogin.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
         getCommand("register").setExecutor(executor);
         getCommand("login").setExecutor(executor);
+        getCommand("slogin").setExecutor(new SLoginCommand(this));
 
-        getLogger().info("SpigotAuth v1.2.0 activado correctamente.");
+        getLogger().info("SLogin v1.3.0 — Synex Login activado. Idioma: " + messages.language());
         if (!getServer().getOnlineMode() && smartAuthAdapter != null) {
-            getLogger().info("Smart Authentication Premium activo: Premium verificado entra sin contraseña.");
+            getLogger().info("Premium Smart Auth activo: las cuentas verificadas entran sin /register ni /login.");
         }
     }
 
