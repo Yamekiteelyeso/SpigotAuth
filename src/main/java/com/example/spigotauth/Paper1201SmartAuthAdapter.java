@@ -45,6 +45,7 @@ public final class Paper1201SmartAuthAdapter {
     private final SpigotAuth plugin;
     private final Logger logger;
     private final Map<UUID, PremiumTicket> premiumTickets = new ConcurrentHashMap<>();
+    private final java.util.Set<Channel> activeChannels = ConcurrentHashMap.newKeySet();
 
     private volatile boolean enabled;
     private Paper1201LoginAccess loginAccess;
@@ -110,6 +111,16 @@ public final class Paper1201SmartAuthAdapter {
         enabled = false;
         premiumTickets.clear();
 
+        // During /slogin reload or plugin shutdown, an in-flight Premium
+        // lookup may have disabled autoRead. Close only channels currently
+        // owned by this adapter; otherwise they could hang indefinitely.
+        for (Channel pending : activeChannels) {
+            pending.eventLoop().execute(() -> {
+                if (pending.isActive()) pending.close();
+            });
+        }
+        activeChannels.clear();
+
         if (sessionVerifier != null) {
             sessionVerifier.close();
             sessionVerifier = null;
@@ -141,6 +152,9 @@ public final class Paper1201SmartAuthAdapter {
             try {
                 if (!enabled || !channel.isActive()) return;
                 if (channel.pipeline().get(HANDLER_NAME) != null) return;
+
+                activeChannels.add(channel);
+                channel.closeFuture().addListener(done -> activeChannels.remove(channel));
 
                 debug("Inicializando canal de login " + channel.id());
 
