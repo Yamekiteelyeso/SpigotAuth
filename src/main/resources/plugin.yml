@@ -1,5 +1,5 @@
 name: SLogin
-version: 1.5.0
+version: 1.6.0
 main: com.example.spigotauth.SpigotAuth
 api-version: '1.20'
 author: Yamekiteelyeso
