@@ -4,7 +4,7 @@ Standalone authentication plugin for Minecraft Java, **Paper 1.20.1 / Java 17**,
 
 ## Installation
 
-1. Use the CI-built SLogin-1.8.0.jar production build, not the dev JAR.
+1. Use the CI-built SLogin-1.8.1.jar production build, not the dev JAR.
 2. Remove other conflicting login plugins. Install on Paper 1.20.1 and Java 17.
 3. Restart, edit plugins/SLogin/config.yml and run /slogin status.
 4. With online-mode=false and smart-auth.enabled=true, Smart Auth should say ACTIVE.
