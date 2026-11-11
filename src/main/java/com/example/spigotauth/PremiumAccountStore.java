@@ -103,17 +103,15 @@ public final class PremiumAccountStore {
             data.set(oldNameKey, null);
         }
 
-        try {
-            data.save(file);
+        if (AtomicYamlFile.save(data, file, logger, "premium-accounts.yml")) {
             return true;
-        } catch (IOException exception) {
-            data.set(base + ".name", oldName);
-            data.set(base + ".first-seen", oldFirstSeen);
-            data.set(base + ".last-seen", oldLastSeen);
-            data.set(newNameKey, oldNewBinding);
-            if (oldNameKey != null) data.set(oldNameKey, oldPreviousBinding);
-            logger.severe("No se pudo guardar premium-accounts.yml: " + exception.getMessage());
-            return false;
         }
+
+        data.set(base + ".name", oldName);
+        data.set(base + ".first-seen", oldFirstSeen);
+        data.set(base + ".last-seen", oldLastSeen);
+        data.set(newNameKey, oldNewBinding);
+        if (oldNameKey != null) data.set(oldNameKey, oldPreviousBinding);
+        return false;
     }
 }
