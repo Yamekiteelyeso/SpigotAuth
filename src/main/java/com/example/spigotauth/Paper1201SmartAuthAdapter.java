@@ -10,11 +10,15 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.login.ClientboundHelloPacket;
 import net.minecraft.network.protocol.login.ServerboundHelloPacket;
+import net.minecraft.network.protocol.login.ServerboundKeyPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
 import org.bukkit.craftbukkit.v1_20_R1.CraftServer;
 
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
 import java.lang.reflect.Field;
+import java.security.KeyPair;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -23,11 +27,10 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Paper 1.20.1 selective Premium authentication.
+ * Paper 1.20.1 selective Premium authentication for offline-mode servers.
  *
- * Paper invokes ChannelInitializeListener before the first Minecraft packet is
- * processed. This guarantees SLogin is present for Login Start instead of
- * racing against an already-active connection.
+ * SLogin owns the Premium encryption/session verification flow because vanilla
+ * chooses its offline branch when server.properties has online-mode=false.
  */
 public final class Paper1201SmartAuthAdapter {
 
@@ -62,7 +65,7 @@ public final class Paper1201SmartAuthAdapter {
         try {
             ChannelInitializeListenerHolder.addListener(INITIALIZER_KEY, this::install);
             enabled = true;
-            logger.info("SLogin Smart Auth activo mediante Paper ChannelInitializeListener.");
+            logger.info("SLogin Smart Auth activo para online-mode=false.");
             return true;
         } catch (Throwable failure) {
             logger.log(Level.SEVERE, "No se pudo registrar el interceptor temprano de SLogin.", failure);
@@ -76,20 +79,14 @@ public final class Paper1201SmartAuthAdapter {
         try {
             ChannelInitializeListenerHolder.removeListener(INITIALIZER_KEY);
         } catch (Throwable ignored) {
-            // Server shutdown: best-effort cleanup.
         }
     }
 
-    /**
-     * Returns true only when the player joined with the exact Mojang UUID that
-     * was discovered before the encryption/session challenge.
-     */
     public boolean consumeVerifiedJoin(String name, UUID actualUuid) {
         if (name == null || actualUuid == null) return false;
         PremiumTicket ticket = premiumTickets.remove(normalize(name));
-        if (ticket == null) return false;
-        if (System.currentTimeMillis() > ticket.expiresAt()) return false;
-        return ticket.expectedUuid().equals(actualUuid);
+        if (ticket == null || System.currentTimeMillis() > ticket.expiresAt()) return false;
+        return ticket.verifiedUuid().equals(actualUuid);
     }
 
     private void install(Channel channel) {
@@ -101,84 +98,89 @@ public final class Paper1201SmartAuthAdapter {
 
                 Object packetHandler = channel.pipeline().get("packet_handler");
                 if (!(packetHandler instanceof Connection connection)) {
-                    logger.warning("SLogin: la conexión no contiene el packet_handler esperado.");
+                    logger.warning("SLogin: packet_handler no disponible en una conexión.");
                     return;
                 }
 
                 channel.pipeline().addBefore(
                         "packet_handler",
                         HANDLER_NAME,
-                        new LoginStartInterceptor(connection, channel)
+                        new LoginInterceptor(connection, channel)
                 );
             } catch (Throwable failure) {
-                logger.log(Level.WARNING, "SLogin no pudo inyectar una conexión nueva.", failure);
+                logger.log(Level.WARNING, "SLogin no pudo inyectar una conexión.", failure);
             }
         });
     }
 
-    private final class LoginStartInterceptor extends ChannelInboundHandlerAdapter {
+    private final class LoginInterceptor extends ChannelInboundHandlerAdapter {
         private final Connection connection;
         private final Channel channel;
-        private boolean decided;
 
-        private LoginStartInterceptor(Connection connection, Channel channel) {
+        private boolean helloDecided;
+        private PremiumAttempt premiumAttempt;
+
+        private LoginInterceptor(Connection connection, Channel channel) {
             this.connection = connection;
             this.channel = channel;
         }
 
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-            if (decided || !(msg instanceof ServerboundHelloPacket hello)) {
-                super.channelRead(ctx, msg);
+            if (msg instanceof ServerboundHelloPacket hello && !helloDecided) {
+                handleHello(ctx, msg, hello);
                 return;
             }
 
-            decided = true;
-            String name = hello.name();
-            ctx.channel().config().setAutoRead(false);
+            if (msg instanceof ServerboundKeyPacket key && premiumAttempt != null) {
+                handlePremiumKey(ctx, key);
+                return;
+            }
 
-            plugin.getPremium().check(name, result ->
-                    ctx.channel().eventLoop().execute(() -> decide(ctx, msg, hello, result)));
+            super.channelRead(ctx, msg);
         }
 
-        private void decide(ChannelHandlerContext ctx,
-                            Object originalPacket,
-                            ServerboundHelloPacket hello,
-                            PremiumChecker.Result result) {
-            if (!ctx.channel().isActive()) return;
+        private void handleHello(ChannelHandlerContext ctx,
+                                 Object originalPacket,
+                                 ServerboundHelloPacket hello) {
+            helloDecided = true;
+            ctx.channel().config().setAutoRead(false);
 
-            try {
-                switch (result.status()) {
-                    case NOT_FOUND -> continueOffline(ctx, originalPacket);
-                    case UNAVAILABLE -> {
-                        boolean protectedName = plugin.getPremiumAccounts().isProtectedName(hello.name());
-                        boolean failClosed = plugin.getConfig().getBoolean(
-                                "smart-auth.fail-closed-on-lookup-error", false);
-                        if (protectedName || failClosed) {
-                            disconnect("premium.verification-unavailable");
-                        } else {
-                            continueOffline(ctx, originalPacket);
+            plugin.getPremium().check(hello.name(), result ->
+                    ctx.channel().eventLoop().execute(() -> {
+                        if (!ctx.channel().isActive()) return;
+                        try {
+                            switch (result.status()) {
+                                case NOT_FOUND -> continueOffline(ctx, originalPacket);
+                                case UNAVAILABLE -> {
+                                    boolean protectedName = plugin.getPremiumAccounts()
+                                            .isProtectedName(hello.name());
+                                    boolean failClosed = plugin.getConfig().getBoolean(
+                                            "smart-auth.fail-closed-on-lookup-error", false);
+                                    if (protectedName || failClosed) {
+                                        disconnect("premium.verification-unavailable");
+                                    } else {
+                                        continueOffline(ctx, originalPacket);
+                                    }
+                                }
+                                case PREMIUM -> beginPremiumChallenge(hello, result.profileId());
+                            }
+                        } catch (Throwable failure) {
+                            failPremium(hello.name(), failure);
                         }
-                    }
-                    case PREMIUM -> beginPremiumChallenge(hello, result.profileId());
-                }
-            } catch (Throwable failure) {
-                logger.log(Level.WARNING,
-                        "SLogin rechazó el challenge Premium de " + hello.name(), failure);
-                premiumTickets.remove(normalize(hello.name()));
-                disconnect("premium.verification-start-error");
-            }
+                    }));
         }
 
         private void continueOffline(ChannelHandlerContext ctx, Object originalPacket) {
+            premiumAttempt = null;
             ctx.fireChannelRead(originalPacket);
-            resume(ctx.channel());
+            resume(channel);
         }
 
         private void beginPremiumChallenge(ServerboundHelloPacket hello, UUID expectedUuid)
                 throws ReflectiveOperationException {
             if (expectedUuid == null) {
-                throw new IllegalStateException("Mojang devolvió un perfil Premium sin UUID");
+                throw new IllegalStateException("Mojang devolvió un perfil Premium sin UUID.");
             }
             if (!(connection.getPacketListener() instanceof ServerLoginPacketListenerImpl login)) {
                 disconnect("premium.incompatible-login-state");
@@ -186,6 +188,8 @@ public final class Paper1201SmartAuthAdapter {
             }
 
             MinecraftServer server = ((CraftServer) plugin.getServer()).getServer();
+            KeyPair keyPair = server.getKeyPair();
+
             Field stateField = findStateField();
             Field profileField = findField(ServerLoginPacketListenerImpl.class, GameProfile.class);
             Field challengeField = findField(ServerLoginPacketListenerImpl.class, byte[].class);
@@ -194,26 +198,117 @@ public final class Paper1201SmartAuthAdapter {
             byte[] challenge = ((byte[]) challengeField.get(login)).clone();
             String serverId = (String) serverIdField.get(login);
 
-            // We intentionally do not call handleHello here because offline-mode
-            // would take the offline branch. Instead we put the vanilla login
-            // listener into its KEY stage, then let its normal handleKey path do
-            // RSA nonce validation, AES enablement and Mojang hasJoined auth.
             profileField.set(login, new GameProfile(expectedUuid, hello.name()));
             stateField.set(login, enumConstant(stateField.getType(), "KEY"));
 
-            premiumTickets.put(
-                    normalize(hello.name()),
-                    new PremiumTicket(expectedUuid,
-                            System.currentTimeMillis() + VERIFIED_TICKET_TTL_MS)
+            premiumAttempt = new PremiumAttempt(
+                    hello.name(),
+                    expectedUuid,
+                    challenge,
+                    serverId,
+                    keyPair,
+                    login,
+                    stateField,
+                    profileField
             );
 
             connection.send(new ClientboundHelloPacket(
                     serverId,
-                    server.getKeyPair().getPublic().getEncoded(),
+                    keyPair.getPublic().getEncoded(),
                     challenge
             ));
-
             resume(channel);
+        }
+
+        private void handlePremiumKey(ChannelHandlerContext ctx, ServerboundKeyPacket packet) {
+            PremiumAttempt attempt = premiumAttempt;
+            premiumAttempt = null;
+            ctx.channel().config().setAutoRead(false);
+
+            try {
+                if (!packet.isChallengeValid(
+                        attempt.challenge(), attempt.keyPair().getPrivate())) {
+                    throw new SecurityException("El nonce RSA de Minecraft no coincide.");
+                }
+
+                SecretKey sharedSecret = packet.getSecretKey(attempt.keyPair().getPrivate());
+                String serverHash = MinecraftSessionService.createServerHash(
+                        attempt.serverId(),
+                        sharedSecret,
+                        attempt.keyPair().getPublic()
+                );
+
+                connection.setupEncryption(
+                        MinecraftCipherFactory.create(Cipher.DECRYPT_MODE, sharedSecret),
+                        MinecraftCipherFactory.create(Cipher.ENCRYPT_MODE, sharedSecret)
+                );
+
+                attempt.stateField().set(
+                        attempt.login(),
+                        enumConstant(attempt.stateField().getType(), "AUTHENTICATING")
+                );
+
+                plugin.getSessionService()
+                        .hasJoined(attempt.name(), serverHash)
+                        .whenComplete((profile, error) ->
+                                channel.eventLoop().execute(() ->
+                                        finishPremiumVerification(attempt, profile, error)));
+            } catch (Throwable failure) {
+                failPremium(attempt.name(), failure);
+            }
+        }
+
+        private void finishPremiumVerification(
+                PremiumAttempt attempt,
+                MinecraftSessionService.VerifiedProfile verified,
+                Throwable error) {
+            if (!channel.isActive()) return;
+
+            try {
+                if (error != null) {
+                    throw new SecurityException("Falló hasJoined de Mojang.", error);
+                }
+                if (verified == null) {
+                    throw new SecurityException("Mojang no confirmó la sesión Premium.");
+                }
+                if (!verified.uuid().equals(attempt.expectedUuid())
+                        || !verified.name().equalsIgnoreCase(attempt.name())) {
+                    throw new SecurityException("El perfil verificado no coincide con el esperado.");
+                }
+
+                attempt.profileField().set(
+                        attempt.login(),
+                        new GameProfile(verified.uuid(), verified.name())
+                );
+
+                // In 1.20.1 the server tick consumes READY_TO_ACCEPT and performs
+                // the normal accepted-login path. We only advance to that state
+                // after RSA + AES + sessionserver verification succeeds.
+                attempt.stateField().set(
+                        attempt.login(),
+                        enumConstant(attempt.stateField().getType(), "READY_TO_ACCEPT")
+                );
+
+                premiumTickets.put(
+                        normalize(verified.name()),
+                        new PremiumTicket(
+                                verified.uuid(),
+                                System.currentTimeMillis() + VERIFIED_TICKET_TTL_MS)
+                );
+
+                logger.info("SLogin verificó Premium: "
+                        + verified.name() + " (" + verified.uuid() + ")");
+                resume(channel);
+            } catch (Throwable failure) {
+                failPremium(attempt.name(), failure);
+            }
+        }
+
+        private void failPremium(String name, Throwable failure) {
+            premiumTickets.remove(normalize(name));
+            logger.log(Level.WARNING,
+                    "SLogin no pudo verificar la sesión Premium de " + name, failure);
+            disconnect("premium.verification-start-error");
         }
 
         private void disconnect(String messagePath) {
@@ -231,7 +326,8 @@ public final class Paper1201SmartAuthAdapter {
         for (Field field : ServerLoginPacketListenerImpl.class.getDeclaredFields()) {
             if (!field.getType().isEnum()) continue;
             for (Object constant : field.getType().getEnumConstants()) {
-                if (((Enum<?>) constant).name().equals("KEY")) {
+                String name = ((Enum<?>) constant).name();
+                if (name.equals("KEY")) {
                     field.setAccessible(true);
                     return field;
                 }
@@ -254,6 +350,12 @@ public final class Paper1201SmartAuthAdapter {
         for (Object value : type.getEnumConstants()) {
             if (((Enum<?>) value).name().equals(name)) return value;
         }
+        // Some mappings expose the 1.20.1 terminal state as VERIFYING.
+        if (name.equals("READY_TO_ACCEPT")) {
+            for (Object value : type.getEnumConstants()) {
+                if (((Enum<?>) value).name().equals("VERIFYING")) return value;
+            }
+        }
         throw new IllegalStateException("Estado NMS no encontrado: " + name);
     }
 
@@ -261,5 +363,16 @@ public final class Paper1201SmartAuthAdapter {
         return name.toLowerCase(Locale.ROOT);
     }
 
-    private record PremiumTicket(UUID expectedUuid, long expiresAt) {}
+    private record PremiumTicket(UUID verifiedUuid, long expiresAt) {}
+
+    private record PremiumAttempt(
+            String name,
+            UUID expectedUuid,
+            byte[] challenge,
+            String serverId,
+            KeyPair keyPair,
+            ServerLoginPacketListenerImpl login,
+            Field stateField,
+            Field profileField
+    ) {}
 }
