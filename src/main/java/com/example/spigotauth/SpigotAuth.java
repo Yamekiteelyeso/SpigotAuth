@@ -12,6 +12,8 @@ public final class SpigotAuth extends JavaPlugin {
     private AuthManager auth;
     private PremiumAccountStore premiumAccounts;
     private PremiumAuthService premiumAuth;
+    private PremiumPreferenceStore premiumPreferences;
+    private PreAuthGuard preAuthGuard;
     private MinecraftSessionService sessionService;
     private Paper1201SmartAuthAdapter smartAuthAdapter;
     private MessageService messages;
@@ -26,10 +28,14 @@ public final class SpigotAuth extends JavaPlugin {
         accounts = new AccountStore(new File(getDataFolder(), "accounts.yml"), getLogger());
         premium = new PremiumChecker(this,
                 getConfig().getLong("premium-cache-minutes", 10) * 60_000L);
+        preAuthGuard = new PreAuthGuard(this);
         auth = new AuthManager(this);
         premiumAccounts = new PremiumAccountStore(
                 new File(getDataFolder(), "premium-accounts.yml"), getLogger());
-        premiumAuth = new PremiumAuthService(this, premiumAccounts, auth);
+        premiumPreferences = new PremiumPreferenceStore(
+                new File(getDataFolder(), "premium-preferences.yml"), getLogger());
+        premiumAuth = new PremiumAuthService(
+                this, premiumAccounts, premiumPreferences, accounts, auth);
         long sessionTimeoutMs = Math.max(1000L,
                 getConfig().getLong("smart-auth.session-timeout-ms", 5000L));
         sessionService = new MinecraftSessionService(Duration.ofMillis(sessionTimeoutMs));
@@ -45,16 +51,21 @@ public final class SpigotAuth extends JavaPlugin {
         }
 
         AuthCommand executor = new AuthCommand(this);
-        if (getCommand("register") == null || getCommand("login") == null || getCommand("slogin") == null) {
+        AccountManagementCommand accountManagement = new AccountManagementCommand(this);
+        if (getCommand("register") == null || getCommand("login") == null
+                || getCommand("changepass") == null || getCommand("premium") == null
+                || getCommand("slogin") == null) {
             getLogger().severe("Faltan comandos en plugin.yml. Desactivando SLogin.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
         getCommand("register").setExecutor(executor);
         getCommand("login").setExecutor(executor);
+        getCommand("changepass").setExecutor(accountManagement);
+        getCommand("premium").setExecutor(accountManagement);
         getCommand("slogin").setExecutor(new SLoginCommand(this));
 
-        getLogger().info("SLogin v1.3.0 — Synex Login activado. Idioma: " + messages.language());
+        getLogger().info("SLogin v1.4.0 — Synex Login activado. Idioma: " + messages.language());
         if (!getServer().getOnlineMode() && smartAuthAdapter != null) {
             getLogger().info("Premium Smart Auth activo: las cuentas verificadas entran sin /register ni /login.");
         }
@@ -96,5 +107,13 @@ public final class SpigotAuth extends JavaPlugin {
 
     public MessageService getMessages() {
         return messages;
+    }
+
+    public PremiumPreferenceStore getPremiumPreferences() {
+        return premiumPreferences;
+    }
+
+    public PreAuthGuard getPreAuthGuard() {
+        return preAuthGuard;
     }
 }
