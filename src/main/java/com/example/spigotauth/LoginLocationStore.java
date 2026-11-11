@@ -103,7 +103,7 @@ public final class LoginLocationStore {
         String name = data.getString(path + ".world");
         if (name == null || name.isBlank()) return null;
         for (String coordinate : new String[]{"x", "y", "z", "yaw", "pitch"}) {
-            if (!data.isNumber(path + "." + coordinate)) {
+            if (!(data.get(path + "." + coordinate) instanceof Number)) {
                 logger.warning("Ubicación incompleta o inválida en " + spot.key()
                         + " (falta " + coordinate + ")");
                 return null;
