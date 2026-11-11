@@ -4,15 +4,16 @@ import com.mojang.authlib.GameProfile;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Resolves and validates the exact Paper/Minecraft 1.20.1 login fields SLogin
- * needs. Resolution happens once at plugin startup instead of guessing fields
- * independently for every connection.
+ * Validated access to the exact Minecraft/Paper 1.20.1 login internals SLogin
+ * needs. Resolution happens once at startup. If the runtime layout differs,
+ * Smart Auth is disabled instead of corrupting the login pipeline.
  */
 final class Paper1201LoginAccess {
 
@@ -24,17 +25,20 @@ final class Paper1201LoginAccess {
     private final Field challenge;
     private final Field serverId;
     private final Field requestedUsername;
+    private final Method startClientVerification;
 
     private Paper1201LoginAccess(Field state,
                                  Field authenticatedProfile,
                                  Field challenge,
                                  Field serverId,
-                                 Field requestedUsername) {
+                                 Field requestedUsername,
+                                 Method startClientVerification) {
         this.state = state;
         this.authenticatedProfile = authenticatedProfile;
         this.challenge = challenge;
         this.serverId = serverId;
         this.requestedUsername = requestedUsername;
+        this.startClientVerification = startClientVerification;
     }
 
     static Paper1201LoginAccess resolve() throws ReflectiveOperationException {
@@ -66,6 +70,29 @@ final class Paper1201LoginAccess {
             }
         }
 
+        Method startVerification = null;
+        for (Method method : owner.getDeclaredMethods()) {
+            int modifiers = method.getModifiers();
+            Class<?>[] parameters = method.getParameterTypes();
+
+            // In 1.20.1 startClientVerification is package-private, returns
+            // void and accepts exactly one GameProfile. The other one-profile
+            // helpers are private.
+            if (!Modifier.isStatic(modifiers)
+                    && !Modifier.isPrivate(modifiers)
+                    && !Modifier.isPublic(modifiers)
+                    && !Modifier.isProtected(modifiers)
+                    && method.getReturnType() == void.class
+                    && parameters.length == 1
+                    && parameters[0] == GameProfile.class) {
+                if (startVerification != null) {
+                    throw new NoSuchMethodException(
+                            "Más de un startClientVerification compatible.");
+                }
+                startVerification = method;
+            }
+        }
+
         if (state == null) throw new NoSuchFieldException("1.20.1 login state");
         if (profile == null) throw new NoSuchFieldException("authenticatedProfile");
         if (challenge == null) throw new NoSuchFieldException("challenge");
@@ -73,14 +100,24 @@ final class Paper1201LoginAccess {
         if (requestedUsername == null) {
             throw new NoSuchFieldException("requestedUsername");
         }
+        if (startVerification == null) {
+            throw new NoSuchMethodException("startClientVerification(GameProfile)");
+        }
 
         for (Field field : new Field[]{
                 state, profile, challenge, serverId, requestedUsername}) {
             field.setAccessible(true);
         }
+        startVerification.setAccessible(true);
 
         return new Paper1201LoginAccess(
-                state, profile, challenge, serverId, requestedUsername);
+                state,
+                profile,
+                challenge,
+                serverId,
+                requestedUsername,
+                startVerification
+        );
     }
 
     byte[] challenge(ServerLoginPacketListenerImpl login)
@@ -102,21 +139,19 @@ final class Paper1201LoginAccess {
                          String username)
             throws ReflectiveOperationException {
         requestedUsername.set(login, username);
-        // Do not inject an unverified GameProfile here. The Mojang profile is
-        // written only after hasJoined succeeds.
         authenticatedProfile.set(login, null);
         setState(login, "KEY");
     }
 
-    void setAuthenticatedProfile(ServerLoginPacketListenerImpl login,
-                                 GameProfile profile)
-            throws IllegalAccessException {
-        authenticatedProfile.set(login, profile);
+    void setAuthenticating(ServerLoginPacketListenerImpl login)
+            throws ReflectiveOperationException {
+        setState(login, "AUTHENTICATING");
     }
 
-    void setState(ServerLoginPacketListenerImpl login, String stateName)
+    void startClientVerification(ServerLoginPacketListenerImpl login,
+                                 GameProfile verifiedProfile)
             throws ReflectiveOperationException {
-        state.set(login, enumConstant(state.getType(), stateName));
+        startClientVerification.invoke(login, verifiedProfile);
     }
 
     boolean supportsState(String stateName) {
@@ -129,6 +164,11 @@ final class Paper1201LoginAccess {
         return Arrays.stream(state.getType().getEnumConstants())
                 .map(value -> ((Enum<?>) value).name())
                 .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private void setState(ServerLoginPacketListenerImpl login, String stateName)
+            throws ReflectiveOperationException {
+        state.set(login, enumConstant(state.getType(), stateName));
     }
 
     private static boolean containsRequiredStates(Class<?> type) {
