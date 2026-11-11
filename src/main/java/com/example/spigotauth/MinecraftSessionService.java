@@ -93,7 +93,7 @@ public final class MinecraftSessionService {
                 .uri(URI.create(SESSION_URL + "?" + query))
                 .timeout(requestTimeout)
                 .header("Accept", "application/json")
-                .header("User-Agent", "SLogin/1.4")
+                .header("User-Agent", "SLogin/1.5")
                 .GET()
                 .build();
 
