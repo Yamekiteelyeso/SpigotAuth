@@ -14,10 +14,12 @@ public final class SpigotAuth extends JavaPlugin {
     private PremiumAuthService premiumAuth;
     private MinecraftSessionService sessionService;
     private Paper1201SmartAuthAdapter smartAuthAdapter;
+    private MessageService messages;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        messages = new MessageService(this);
 
         accounts = new AccountStore(new File(getDataFolder(), "accounts.yml"), getLogger());
         premium = new PremiumChecker(this,
@@ -49,11 +51,9 @@ public final class SpigotAuth extends JavaPlugin {
         getCommand("register").setExecutor(executor);
         getCommand("login").setExecutor(executor);
 
-        getLogger().info("SpigotAuth v1.1.0 activado correctamente.");
-        if (!getServer().getOnlineMode()) {
-            getLogger().warning("Servidor en offline-mode: las cuentas locales están protegidas, "
-                    + "pero Smart Authentication Premium seguirá desactivado hasta que el adaptador "
-                    + "pre-login de Paper 1.20.1 esté instalado y validado.");
+        getLogger().info("SpigotAuth v1.2.0 activado correctamente.");
+        if (!getServer().getOnlineMode() && smartAuthAdapter != null) {
+            getLogger().info("Smart Authentication Premium activo: Premium verificado entra sin contraseña.");
         }
     }
 
@@ -89,5 +89,9 @@ public final class SpigotAuth extends JavaPlugin {
 
     public Paper1201SmartAuthAdapter getSmartAuthAdapter() {
         return smartAuthAdapter;
+    }
+
+    public MessageService getMessages() {
+        return messages;
     }
 }
