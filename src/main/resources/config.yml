@@ -1,20 +1,133 @@
-# Seguridad de cuentas locales
-min-password-length: 8
-max-password-length: 64
-max-attempts: 5
-lock-minutes: 5
-login-timeout-seconds: 60
+# ============================================================
+# SLogin — Synex Login
+# ============================================================
+# Idioma de los mensajes: es / en
+language: es
 
-# Descubrimiento de perfiles Java en la API oficial de Mojang.
-# IMPORTANTE: este lookup NO demuestra propiedad de la cuenta.
+# Seguridad para cuentas offline/cracked
+security:
+  min-password-length: 8
+  max-password-length: 64
+  max-attempts: 5
+  lock-minutes: 5
+  login-timeout-seconds: 60
+
+# Cache del lookup de perfiles Java.
 premium-cache-minutes: 10
 
 smart-auth:
-  # Tiempo máximo de una consulta al servicio oficial de sesión.
-  # Un timeout/error durante un desafío Premium debe fallar cerrado.
+  enabled: true
+
+  # Paper 1.20.1 únicamente.
+  # Cuando un nombre corresponde a una cuenta Premium, SLogin inicia el
+  # challenge oficial de cifrado y deja que el login vanilla valide la sesión.
+  # Solo se omite /register y /login si el UUID final coincide con el UUID
+  # Premium esperado.
   session-timeout-ms: 5000
 
-  # Verificación Premium automática en Paper 1.20.1.
-  # true: una cuenta Premium que complete el challenge oficial entra
-  # directamente sin /register ni /login.
-  enabled: true
+  # Si Mojang no responde:
+  # false = nombres no protegidos pueden seguir por login offline.
+  # true  = se rechazan todos los logins hasta poder verificar.
+  fail-closed-on-lookup-error: false
+
+# Mensajes editables. El idioma activo se elige arriba con language: es/en.
+messages:
+  es:
+    prefix: "&8[&bSLogin&8] &r"
+    premium:
+      verified:
+        - "&8&m--------------------------------"
+        - "&a✔ &fCuenta Premium verificada."
+        - "&7Bienvenido, &b{player}&7. Entraste automáticamente."
+        - "&8&m--------------------------------"
+      save-error: "&cNo se pudo guardar tu identidad Premium. Inténtalo de nuevo."
+      verification-unavailable: "&cNo se pudo verificar tu cuenta Premium ahora mismo. Inténtalo de nuevo."
+      verification-start-error: "&cNo se pudo iniciar la verificación Premium."
+      incompatible-login-state: "&cTu conexión llegó en un estado de login no compatible."
+    auth:
+      already-authenticated: "{prefix}&aYa estás autenticado."
+      registered: "{prefix}&a✔ Cuenta creada. Ya puedes jugar."
+      logged-in: "{prefix}&a✔ Sesión iniciada. Bienvenido de vuelta."
+      wrong-password: "{prefix}&cContraseña incorrecta. &7Intentos restantes: &f{remaining}&7."
+      locked: "{prefix}&cDemasiados intentos. &7Espera &f{seconds}s&7."
+      locked-kick: "&cDemasiados intentos de acceso.\n&7Vuelve a intentarlo en &f{minutes} minutos&7."
+      timeout-kick: "&cTiempo de autenticación agotado.\n&7Vuelve a entrar para intentarlo otra vez."
+      chat-blocked: "{prefix}&cAutentícate antes de usar el chat."
+      command-blocked: "{prefix}&cAutentícate antes de usar otros comandos."
+    register:
+      prompt:
+        - "&8&m--------------------------------"
+        - "&bRegistro requerido"
+        - "&7Crea una contraseña con:"
+        - "&f/register <contraseña> <confirmar>"
+        - "&7Tienes &f{seconds}s &7para autenticarte."
+        - "&8&m--------------------------------"
+      already-registered: "{prefix}&eYa estás registrado. Usa &f/login <contraseña>&e."
+      usage: "{prefix}&eUso: &f/register <contraseña> <confirmar>"
+      length: "{prefix}&cLa contraseña debe tener entre &f{min}&c y &f{max}&c caracteres."
+      mismatch: "{prefix}&cLas contraseñas no coinciden."
+      save-error: "{prefix}&cNo se pudo guardar tu cuenta. Contacta a un administrador."
+    login:
+      prompt:
+        - "&8&m--------------------------------"
+        - "&bInicio de sesión"
+        - "&7Usa &f/login <contraseña>"
+        - "&7Tienes &f{seconds}s &7para autenticarte."
+        - "&8&m--------------------------------"
+      not-registered: "{prefix}&eNo estás registrado. Usa &f/register <contraseña> <confirmar>&e."
+      usage: "{prefix}&eUso: &f/login <contraseña>"
+    admin:
+      reload-ok: "{prefix}&aConfiguración recargada. Idioma activo: &f{language}&a."
+      no-permission: "{prefix}&cNo tienes permiso."
+    console:
+      player-only: "{prefix}&cEste comando solo se puede usar dentro del juego."
+
+  en:
+    prefix: "&8[&bSLogin&8] &r"
+    premium:
+      verified:
+        - "&8&m--------------------------------"
+        - "&a✔ &fPremium account verified."
+        - "&7Welcome, &b{player}&7. You were logged in automatically."
+        - "&8&m--------------------------------"
+      save-error: "&cYour Premium identity could not be saved. Try again."
+      verification-unavailable: "&cYour Premium account could not be verified right now. Try again."
+      verification-start-error: "&cPremium verification could not be started."
+      incompatible-login-state: "&cYour connection reached an unsupported login state."
+    auth:
+      already-authenticated: "{prefix}&aYou are already authenticated."
+      registered: "{prefix}&a✔ Account created. You can now play."
+      logged-in: "{prefix}&a✔ Logged in. Welcome back."
+      wrong-password: "{prefix}&cIncorrect password. &7Attempts remaining: &f{remaining}&7."
+      locked: "{prefix}&cToo many attempts. &7Wait &f{seconds}s&7."
+      locked-kick: "&cToo many login attempts.\n&7Try again in &f{minutes} minutes&7."
+      timeout-kick: "&cAuthentication timed out.\n&7Reconnect and try again."
+      chat-blocked: "{prefix}&cAuthenticate before using chat."
+      command-blocked: "{prefix}&cAuthenticate before using other commands."
+    register:
+      prompt:
+        - "&8&m--------------------------------"
+        - "&bRegistration required"
+        - "&7Create a password with:"
+        - "&f/register <password> <confirm>"
+        - "&7You have &f{seconds}s &7to authenticate."
+        - "&8&m--------------------------------"
+      already-registered: "{prefix}&eYou are already registered. Use &f/login <password>&e."
+      usage: "{prefix}&eUsage: &f/register <password> <confirm>"
+      length: "{prefix}&cPassword length must be between &f{min}&c and &f{max}&c characters."
+      mismatch: "{prefix}&cPasswords do not match."
+      save-error: "{prefix}&cYour account could not be saved. Contact an administrator."
+    login:
+      prompt:
+        - "&8&m--------------------------------"
+        - "&bLogin required"
+        - "&7Use &f/login <password>"
+        - "&7You have &f{seconds}s &7to authenticate."
+        - "&8&m--------------------------------"
+      not-registered: "{prefix}&eYou are not registered. Use &f/register <password> <confirm>&e."
+      usage: "{prefix}&eUsage: &f/login <password>"
+    admin:
+      reload-ok: "{prefix}&aConfiguration reloaded. Active language: &f{language}&a."
+      no-permission: "{prefix}&cYou do not have permission."
+    console:
+      player-only: "{prefix}&cThis command can only be used in-game."
