@@ -105,7 +105,7 @@ public final class PremiumChecker {
             connection.setConnectTimeout(4000);
             connection.setReadTimeout(4000);
             connection.setRequestProperty("Accept", "application/json");
-            connection.setRequestProperty("User-Agent", "SLogin/1.5");
+            connection.setRequestProperty("User-Agent", "SLogin/1.8.0");
 
             int status = connection.getResponseCode();
             if (status == HttpURLConnection.HTTP_OK) {
