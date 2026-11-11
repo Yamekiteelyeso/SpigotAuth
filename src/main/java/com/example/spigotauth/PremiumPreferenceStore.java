@@ -81,14 +81,11 @@ public final class PremiumPreferenceStore {
         data.set(path + ".uuid", uuid.toString());
         data.set(path + ".verified", verified);
 
-        try {
-            data.save(file);
+        if (AtomicYamlFile.save(data, file, logger, "premium-preferences.yml")) {
             return true;
-        } catch (IOException exception) {
-            data.set(path + ".uuid", oldUuid);
-            data.set(path + ".verified", oldVerified);
-            logger.severe("No se pudo guardar premium-preferences.yml: " + exception.getMessage());
-            return false;
         }
+        data.set(path + ".uuid", oldUuid);
+        data.set(path + ".verified", oldVerified);
+        return false;
     }
 }
