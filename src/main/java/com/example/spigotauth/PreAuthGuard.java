@@ -101,7 +101,10 @@ public final class PreAuthGuard {
         if (target.getEquipment() != null) {
             for (EquipmentSlot slot : EquipmentSlot.values()) {
                 try {
-                    equipment.put(slot, target.getEquipment().getItem(slot).clone());
+                    ItemStack item = target.getEquipment().getItem(slot);
+                    // Empty inventory and armor slots are null on Bukkit.
+                    // Never let a null item abort pre-auth cleanup.
+                    equipment.put(slot, copyOrAir(item));
                 } catch (IllegalArgumentException ignored) {
                     // Some enum values are not applicable to players on every API revision.
                 }
@@ -113,6 +116,10 @@ public final class PreAuthGuard {
                 viewer.sendEquipmentChange(target, equipment);
             }
         }
+    }
+
+    static ItemStack copyOrAir(ItemStack item) {
+        return item == null ? new ItemStack(Material.AIR) : item.clone();
     }
 
     private static void sendMaskedEquipment(Player viewer, Player target) {
