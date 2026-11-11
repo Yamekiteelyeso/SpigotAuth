@@ -481,11 +481,11 @@ public final class Paper1201SmartAuthAdapter {
         }
 
         private void failPremium(String name, Throwable failure) {
-            if (name != null && plugin.getPremiumPreferences().isPending(name)) {
-                plugin.getPremiumPreferences().clear(name);
-                debug("Migración Premium pendiente revertida para " + name);
-            }
-
+            // Never erase the owner's pending migration because a remote
+            // connection failed its challenge. Otherwise a cracked client
+            // can repeatedly connect with the victim's name and cancel their
+            // /premium request. Only a verified join or an authenticated
+            // admin cancellation may change the stored migration.
             logger.log(Level.WARNING,
                     "SLogin no pudo verificar la sesión Premium de " + name,
                     unwrap(failure));
