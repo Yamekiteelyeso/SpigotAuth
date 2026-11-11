@@ -19,7 +19,10 @@ class PreAuthGuardTest {
         ItemStack original = new ItemStack(Material.DIAMOND, 2);
         ItemStack copy = PreAuthGuard.copyOrAir(original);
         assertNotSame(original, copy);
-        assertEquals(original, copy);
+        // ItemStack.equals consults Bukkit's ItemFactory, which is not
+        // available in a standalone JVM unit test. Compare safe fields.
+        assertEquals(original.getType(), copy.getType());
+        assertEquals(original.getAmount(), copy.getAmount());
         copy.setAmount(1);
         assertEquals(2, original.getAmount());
     }
