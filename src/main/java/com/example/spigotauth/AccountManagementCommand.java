@@ -81,16 +81,16 @@ public final class AccountManagementCommand implements CommandExecutor {
 
         String name = player.getName();
 
+        UUID alreadyVerified = plugin.getPremiumAccounts().findVerifiedUuidByName(name);
+        if (alreadyVerified != null) {
+            plugin.getMessages().send(player, "premium.command-already");
+            return true;
+        }
+
         // /premium is a migration command for an existing LOCAL account.
         // A fresh/unregistered player cannot use it as a shortcut around /register.
         if (!plugin.getAccounts().isRegistered(name)) {
             plugin.getMessages().send(player, "premium.command-register-first");
-            return true;
-        }
-
-        UUID alreadyVerified = plugin.getPremiumAccounts().findVerifiedUuidByName(name);
-        if (alreadyVerified != null) {
-            plugin.getMessages().send(player, "premium.command-already");
             return true;
         }
 
