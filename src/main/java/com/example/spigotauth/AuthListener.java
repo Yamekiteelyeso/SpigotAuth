@@ -23,7 +23,7 @@ import java.util.Set;
 
 public final class AuthListener implements Listener {
 
-    private static final Set<String> ALLOWED_COMMANDS = Set.of("login", "register");
+    private static final Set<String> ALLOWED_COMMANDS = Set.of("login", "register", "slogin");
     private final SpigotAuth plugin;
 
     public AuthListener(SpigotAuth plugin) {
@@ -58,7 +58,7 @@ public final class AuthListener implements Listener {
         }
 
         plugin.getAuth().startTimeout(player);
-        long timeout = plugin.getConfig().getLong("login-timeout-seconds", 60);
+        long timeout = plugin.getConfig().getLong("security.login-timeout-seconds", 60);
         if (plugin.getAccounts().isRegistered(player.getName())) {
             plugin.getMessages().sendLines(player, "login.prompt",
                     java.util.Map.of("player", player.getName(), "seconds", timeout));
