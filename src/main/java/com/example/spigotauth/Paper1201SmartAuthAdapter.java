@@ -360,7 +360,14 @@ public final class Paper1201SmartAuthAdapter {
                 // hasJoined.
                 connection.setupEncryption(sharedSecret);
 
-                InetAddress remoteAddress = remoteAddress(connection);
+                MinecraftServer minecraftServer =
+                        ((CraftServer) plugin.getServer()).getServer();
+
+                InetAddress remoteAddress =
+                        minecraftServer.getPreventProxyConnections()
+                                ? remoteAddress(connection)
+                                : null;
+
                 long timeoutMs = Math.max(
                         1000L,
                         plugin.getConfig().getLong(
