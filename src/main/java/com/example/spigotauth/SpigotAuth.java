@@ -65,6 +65,42 @@ public final class SpigotAuth extends JavaPlugin {
         }
     }
 
+    public void reloadSLoginConfiguration() {
+        reloadConfig();
+
+        if (premium != null) {
+            premium.setCacheMillis(
+                    getConfig().getLong("premium-cache-minutes", 10) * 60_000L
+            );
+        }
+
+        boolean shouldUseSmartAuth = !getServer().getOnlineMode()
+                && getConfig().getBoolean("smart-auth.enabled", true);
+
+        if (!shouldUseSmartAuth) {
+            if (smartAuthAdapter != null) {
+                smartAuthAdapter.disable();
+                smartAuthAdapter = null;
+                getLogger().info("SLogin Smart Auth desactivado por configuración.");
+            }
+            return;
+        }
+
+        if (smartAuthAdapter == null || !smartAuthAdapter.isEnabled()) {
+            Paper1201SmartAuthAdapter replacement =
+                    new Paper1201SmartAuthAdapter(this);
+            if (replacement.enable()) {
+                smartAuthAdapter = replacement;
+                getLogger().info("SLogin Smart Auth activado tras reload.");
+            } else {
+                smartAuthAdapter = null;
+                getLogger().severe(
+                        "SLogin Smart Auth no pudo activarse tras reload."
+                );
+            }
+        }
+    }
+
     @Override
     public void onDisable() {
         if (smartAuthAdapter != null) smartAuthAdapter.disable();

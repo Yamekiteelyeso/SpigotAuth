@@ -71,6 +71,7 @@ messages:
       command-unavailable: "{prefix}&cMojang no está disponible ahora mismo. Inténtalo más tarde."
       command-save-error: "{prefix}&cNo se pudo guardar tu preferencia Premium."
       command-enabled: "{prefix}&aModo Premium preparado. &7En tu siguiente conexión SLogin verificará tu sesión oficial."
+      command-pending: "{prefix}&eYa tienes una migración Premium pendiente. &7Reconecta con tu cuenta Premium para terminarla."
       command-already: "{prefix}&aTu identidad ya está protegida como Premium."
       command-reconnect: "&aModo Premium preparado.\n&7Vuelve a entrar con tu cuenta Premium para verificarla."
     auth:
@@ -144,6 +145,7 @@ messages:
       command-unavailable: "{prefix}&cMojang is unavailable right now. Try again later."
       command-save-error: "{prefix}&cYour Premium preference could not be saved."
       command-enabled: "{prefix}&aPremium mode prepared. &7On your next connection SLogin will verify your official session."
+      command-pending: "{prefix}&eYou already have a pending Premium migration. &7Reconnect with your Premium account to finish it."
       command-already: "{prefix}&aYour identity is already protected as Premium."
       command-reconnect: "&aPremium mode prepared.\n&7Reconnect using your Premium account to verify it."
     auth:

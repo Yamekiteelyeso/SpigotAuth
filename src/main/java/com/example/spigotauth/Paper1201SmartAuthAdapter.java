@@ -102,6 +102,10 @@ public final class Paper1201SmartAuthAdapter {
         }
     }
 
+    public boolean isEnabled() {
+        return enabled;
+    }
+
     public void disable() {
         enabled = false;
         premiumTickets.clear();
