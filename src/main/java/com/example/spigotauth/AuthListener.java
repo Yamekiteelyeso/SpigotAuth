@@ -1,6 +1,5 @@
 package com.example.spigotauth;
 
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -24,7 +23,7 @@ import java.util.Set;
 
 public final class AuthListener implements Listener {
 
-    private static final Set<String> ALLOWED_COMMANDS = Set.of("login", "register");
+    private static final Set<String> ALLOWED_COMMANDS = Set.of("login", "register", "slogin");
     private final SpigotAuth plugin;
 
     public AuthListener(SpigotAuth plugin) {
@@ -39,18 +38,11 @@ public final class AuthListener implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         event.setJoinMessage(null);
-        plugin.getAuth().startTimeout(player);
 
-        // En online-mode, el propio servidor ya validó la sesión con los
-        // servidores de autenticación de Minecraft. Esa es una prueba real.
         if (plugin.getServer().getOnlineMode()) {
             plugin.getAuth().markAuthenticated(player);
-            player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            player.sendMessage(ChatColor.GREEN + "✔ " + ChatColor.WHITE
-                    + "Tu cuenta fue verificada por Minecraft.");
-            player.sendMessage(ChatColor.GRAY + "Bienvenido, " + ChatColor.AQUA + player.getName()
-                    + ChatColor.GRAY + ". Ya puedes jugar.");
-            player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            plugin.getMessages().sendLines(player, "premium.verified",
+                    java.util.Map.of("player", player.getName()));
             return;
         }
 
@@ -59,40 +51,21 @@ public final class AuthListener implements Listener {
             var verified = new MinecraftSessionService.VerifiedProfile(
                     player.getUniqueId(), player.getName());
             if (plugin.getPremiumAuth().authenticateVerified(player, verified)) {
-                player.sendMessage(ChatColor.GRAY
-                        + "Tu identidad fue verificada durante el protocolo de login.");
+                plugin.getMessages().sendLines(player, "premium.verified",
+                        java.util.Map.of("player", player.getName()));
             }
             return;
         }
 
-        // Los jugadores offline no desafiados siguen usando contraseña local.
-        // El lookup público sigue siendo únicamente informativo.
-        plugin.getPremium().check(player.getName(), result -> {
-            if (!player.isOnline()) return;
-
-            player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            switch (result.status()) {
-                case PREMIUM -> player.sendMessage(ChatColor.GOLD + "★ "
-                        + ChatColor.WHITE + "Encontramos un perfil de Minecraft Java para tu nombre.");
-                case NOT_FOUND -> player.sendMessage(ChatColor.GRAY
-                        + "No encontramos un perfil premium con este nombre.");
-                case UNAVAILABLE -> player.sendMessage(ChatColor.YELLOW
-                        + "No pudimos consultar Mojang ahora mismo. Puedes continuar con tu contraseña.");
-            }
-
-            if (plugin.getAccounts().isRegistered(player.getName())) {
-                player.sendMessage(ChatColor.AQUA + "» " + ChatColor.WHITE
-                        + "Inicia sesión con " + ChatColor.YELLOW + "/login <contraseña>");
-            } else {
-                player.sendMessage(ChatColor.AQUA + "» " + ChatColor.WHITE
-                        + "Crea tu cuenta con " + ChatColor.YELLOW
-                        + "/register <contraseña> <confirmar>");
-            }
-            player.sendMessage(ChatColor.GRAY + "Tienes "
-                    + plugin.getConfig().getLong("login-timeout-seconds", 60)
-                    + " segundos para autenticarte.");
-            player.sendMessage(ChatColor.DARK_GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        });
+        plugin.getAuth().startTimeout(player);
+        long timeout = plugin.getConfig().getLong("security.login-timeout-seconds", 60);
+        if (plugin.getAccounts().isRegistered(player.getName())) {
+            plugin.getMessages().sendLines(player, "login.prompt",
+                    java.util.Map.of("player", player.getName(), "seconds", timeout));
+        } else {
+            plugin.getMessages().sendLines(player, "register.prompt",
+                    java.util.Map.of("player", player.getName(), "seconds", timeout));
+        }
     }
 
     @EventHandler
@@ -125,8 +98,7 @@ public final class AuthListener implements Listener {
         event.setCancelled(true);
         Player player = event.getPlayer();
         plugin.getServer().getScheduler().runTask(plugin,
-                () -> player.sendMessage(ChatColor.RED + "✖ " + ChatColor.GRAY
-                        + "Primero debes iniciar sesión para hablar."));
+                () -> plugin.getMessages().send(player, "auth.chat-blocked"));
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
@@ -140,8 +112,7 @@ public final class AuthListener implements Listener {
 
         if (!ALLOWED_COMMANDS.contains(command)) {
             event.setCancelled(true);
-            event.getPlayer().sendMessage(ChatColor.RED + "✖ " + ChatColor.GRAY
-                    + "Debes autenticarte antes de usar comandos.");
+            plugin.getMessages().send(event.getPlayer(), "auth.command-blocked");
         }
     }
 

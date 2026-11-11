@@ -14,10 +14,14 @@ public final class SpigotAuth extends JavaPlugin {
     private PremiumAuthService premiumAuth;
     private MinecraftSessionService sessionService;
     private Paper1201SmartAuthAdapter smartAuthAdapter;
+    private MessageService messages;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        getConfig().options().copyDefaults(true);
+        saveConfig();
+        messages = new MessageService(this);
 
         accounts = new AccountStore(new File(getDataFolder(), "accounts.yml"), getLogger());
         premium = new PremiumChecker(this,
@@ -25,7 +29,7 @@ public final class SpigotAuth extends JavaPlugin {
         auth = new AuthManager(this);
         premiumAccounts = new PremiumAccountStore(
                 new File(getDataFolder(), "premium-accounts.yml"), getLogger());
-        premiumAuth = new PremiumAuthService(premiumAccounts, auth);
+        premiumAuth = new PremiumAuthService(this, premiumAccounts, auth);
         long sessionTimeoutMs = Math.max(1000L,
                 getConfig().getLong("smart-auth.session-timeout-ms", 5000L));
         sessionService = new MinecraftSessionService(Duration.ofMillis(sessionTimeoutMs));
@@ -35,25 +39,24 @@ public final class SpigotAuth extends JavaPlugin {
         if (!getServer().getOnlineMode() && getConfig().getBoolean("smart-auth.enabled", true)) {
             smartAuthAdapter = new Paper1201SmartAuthAdapter(this);
             if (!smartAuthAdapter.enable()) {
-                getLogger().severe("Smart Authentication no pudo activarse; se mantiene el login local.");
+                getLogger().severe("SLogin Smart Authentication no pudo activarse; se mantiene el login local.");
                 smartAuthAdapter = null;
             }
         }
 
         AuthCommand executor = new AuthCommand(this);
-        if (getCommand("register") == null || getCommand("login") == null) {
-            getLogger().severe("Faltan los comandos register/login en plugin.yml. Desactivando SpigotAuth.");
+        if (getCommand("register") == null || getCommand("login") == null || getCommand("slogin") == null) {
+            getLogger().severe("Faltan comandos en plugin.yml. Desactivando SLogin.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
         getCommand("register").setExecutor(executor);
         getCommand("login").setExecutor(executor);
+        getCommand("slogin").setExecutor(new SLoginCommand(this));
 
-        getLogger().info("SpigotAuth v1.1.0 activado correctamente.");
-        if (!getServer().getOnlineMode()) {
-            getLogger().warning("Servidor en offline-mode: las cuentas locales están protegidas, "
-                    + "pero Smart Authentication Premium seguirá desactivado hasta que el adaptador "
-                    + "pre-login de Paper 1.20.1 esté instalado y validado.");
+        getLogger().info("SLogin v1.3.0 — Synex Login activado. Idioma: " + messages.language());
+        if (!getServer().getOnlineMode() && smartAuthAdapter != null) {
+            getLogger().info("Premium Smart Auth activo: las cuentas verificadas entran sin /register ni /login.");
         }
     }
 
@@ -89,5 +92,9 @@ public final class SpigotAuth extends JavaPlugin {
 
     public Paper1201SmartAuthAdapter getSmartAuthAdapter() {
         return smartAuthAdapter;
+    }
+
+    public MessageService getMessages() {
+        return messages;
     }
 }
