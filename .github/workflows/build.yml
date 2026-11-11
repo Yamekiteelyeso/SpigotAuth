@@ -52,6 +52,7 @@ jobs:
 
           cat > "$SERVER_DIR/server.properties" <<'EOF'
           online-mode=false
+          prevent-proxy-connections=false
           server-port=25579
           max-players=2
           view-distance=2
@@ -199,14 +200,43 @@ jobs:
 
               packet_length = read_varint(sock)
               payload = recv_exact(sock, packet_length)
-              packet_id, _ = decode_varint(payload)
+              packet_id, pos = decode_varint(payload)
 
               if packet_id != 0x01:
                   raise SystemExit(
                       f"Expected Login Encryption Request 0x01, got 0x{packet_id:02x}"
                   )
 
-              print("SLogin protocol smoke test: Encryption Request received.")
+              server_id_len, pos = decode_varint(payload, pos)
+              server_id = payload[pos:pos + server_id_len]
+              pos += server_id_len
+
+              public_key_len, pos = decode_varint(payload, pos)
+              public_key = payload[pos:pos + public_key_len]
+              pos += public_key_len
+
+              challenge_len, pos = decode_varint(payload, pos)
+              challenge = payload[pos:pos + challenge_len]
+              pos += challenge_len
+
+              if len(public_key) < 128:
+                  raise SystemExit(
+                      f"Encryption Request public key is too short: {len(public_key)}"
+                  )
+              if len(challenge) != 4:
+                  raise SystemExit(
+                      f"Expected 4-byte verify token, got {len(challenge)} bytes"
+                  )
+              if pos != len(payload):
+                  raise SystemExit(
+                      f"Unexpected trailing bytes in Encryption Request: {len(payload) - pos}"
+                  )
+
+              print(
+                  "SLogin protocol smoke test: valid Encryption Request "
+                  f"(serverId={server_id!r}, publicKey={len(public_key)} bytes, "
+                  f"challenge={len(challenge)} bytes)."
+              )
           PY
 
           grep -q "SLogin v1.5.0" server.log
