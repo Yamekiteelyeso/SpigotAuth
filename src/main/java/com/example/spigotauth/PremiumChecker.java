@@ -77,7 +77,7 @@ public final class PremiumChecker {
             connection.setConnectTimeout(4000);
             connection.setReadTimeout(4000);
             connection.setRequestProperty("Accept", "application/json");
-            connection.setRequestProperty("User-Agent", "SpigotAuth/1.1");
+            connection.setRequestProperty("User-Agent", "SLogin/1.4");
 
             int status = connection.getResponseCode();
             if (status == HttpURLConnection.HTTP_OK) {
