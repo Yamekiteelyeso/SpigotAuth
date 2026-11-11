@@ -27,9 +27,9 @@ public final class PremiumChecker {
     private static final Pattern PROFILE_ID =
             Pattern.compile("\"id\"\\s*:\\s*\"([0-9a-fA-F]{32})\"");
     private static final Pattern PROFILE_NAME =
-            Pattern.compile("\\"name\\"\\s*:\\s*\\"([A-Za-z0-9_]{3,16})\\"");
+            Pattern.compile("\"name\"\\s*:\\s*\"([A-Za-z0-9_]{3,16})\"");
     private static final Pattern DEMO = Pattern.compile(
-            "\\"demo\\"\\s*:\\s*true", Pattern.CASE_INSENSITIVE);
+            "\"demo\"\\s*:\\s*true", Pattern.CASE_INSENSITIVE);
     private static final Pattern VALID_NAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
 
     private static final String[] LOOKUP_ENDPOINTS = {
