@@ -78,6 +78,10 @@ public final class SLoginCommand implements CommandExecutor, TabCompleter {
                     plugin.getMessages().send(sender, "console.player-only");
                     return true;
                 }
+                if (!player.isOnGround()) {
+                    plugin.getMessages().send(sender, "admin.location-stand-on-block");
+                    return true;
+                }
                 if (!locations.set(spot, LoginLocationStore.standingPosition(player))) {
                     plugin.getMessages().send(sender, "admin.location-save-error");
                 } else {
