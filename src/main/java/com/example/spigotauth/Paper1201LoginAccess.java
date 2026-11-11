@@ -10,10 +10,14 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Validated access to the real Minecraft/Paper 1.20.1 login layout.
+ * Access validated against the real Paper 1.20.1 / protocol 763 login layout.
  *
- * 1.20.1 uses the legacy login state machine:
- * HELLO -> KEY -> AUTHENTICATING -> READY_TO_ACCEPT -> DELAY_ACCEPT -> ACCEPTED.
+ * 1.20.1 uses the legacy state machine:
+ * HELLO -> KEY -> AUTHENTICATING -> READY_TO_ACCEPT
+ * -> DELAY_ACCEPT (when needed) -> ACCEPTED.
+ *
+ * Newer VERIFYING / WAITING_FOR_DUPE_DISCONNECT / PROTOCOL_SWITCHING states
+ * are intentionally rejected by the compatibility tests for this adapter.
  */
 final class Paper1201LoginAccess {
 
@@ -75,21 +79,18 @@ final class Paper1201LoginAccess {
             field.setAccessible(true);
         }
 
-        return new Paper1201LoginAccess(
-                state,
-                profile,
-                challenge,
-                serverId
-        );
+        return new Paper1201LoginAccess(state, profile, challenge, serverId);
     }
 
     byte[] challenge(ServerLoginPacketListenerImpl login)
             throws IllegalAccessException {
         byte[] value = (byte[]) challenge.get(login);
+
         if (value == null || value.length == 0) {
             throw new IllegalStateException(
-                    "Paper devolvió un challenge vacío.");
+                    "Paper devolvió un challenge de login vacío.");
         }
+
         return value.clone();
     }
 
@@ -100,12 +101,18 @@ final class Paper1201LoginAccess {
     }
 
     /**
-     * Mirrors the minimum online-mode branch of vanilla handleHello in 1.20.1.
-     * The UUID remains null until Mojang hasJoinedServer proves ownership.
+     * Reproduces the minimum part of vanilla handleHello's online branch that
+     * is skipped because the server itself is running online-mode=false.
      */
     void beginKeyExchange(ServerLoginPacketListenerImpl login,
                           String username)
             throws ReflectiveOperationException {
+        if (username == null || !username.matches("[A-Za-z0-9_]{3,16}")) {
+            throw new IllegalArgumentException("Nombre de Minecraft inválido.");
+        }
+
+        // 1.20.1 stores the candidate in gameProfile before entering KEY.
+        // UUID stays null until Authlib proves ownership.
         gameProfile.set(login, new GameProfile(null, username));
         setState(login, "KEY");
     }
@@ -116,21 +123,26 @@ final class Paper1201LoginAccess {
     }
 
     /**
-     * Hands a fully Mojang-verified profile back to the legacy 1.20.1 tick
-     * state machine. The server thread will then perform bans/whitelist/full
-     * server/duplicate checks and complete the normal login.
+     * Gives Paper the full Authlib-verified profile and returns control to its
+     * normal server-thread state machine. Paper then performs the ordinary
+     * whitelist/ban/full-server/duplicate-player acceptance path.
      */
     void readyToAccept(ServerLoginPacketListenerImpl login,
                        GameProfile verifiedProfile)
             throws ReflectiveOperationException {
+        if (verifiedProfile == null
+                || verifiedProfile.getId() == null
+                || verifiedProfile.getName() == null) {
+            throw new IllegalArgumentException(
+                    "El GameProfile Premium verificado está incompleto.");
+        }
+
         gameProfile.set(login, verifiedProfile);
         setState(login, "READY_TO_ACCEPT");
     }
 
     boolean supportsState(String stateName) {
-        return Arrays.stream(state.getType().getEnumConstants())
-                .map(value -> ((Enum<?>) value).name())
-                .anyMatch(stateName::equals);
+        return stateNames().contains(stateName);
     }
 
     Set<String> stateNames() {
@@ -139,7 +151,8 @@ final class Paper1201LoginAccess {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
-    private void setState(ServerLoginPacketListenerImpl login, String stateName)
+    private void setState(ServerLoginPacketListenerImpl login,
+                          String stateName)
             throws ReflectiveOperationException {
         state.set(login, enumConstant(state.getType(), stateName));
     }
@@ -148,6 +161,7 @@ final class Paper1201LoginAccess {
         Set<String> names = Arrays.stream(type.getEnumConstants())
                 .map(value -> ((Enum<?>) value).name())
                 .collect(Collectors.toSet());
+
         return names.containsAll(REQUIRED_STATES);
     }
 
@@ -165,8 +179,11 @@ final class Paper1201LoginAccess {
     private static Object enumConstant(Class<?> type, String name)
             throws NoSuchFieldException {
         for (Object value : type.getEnumConstants()) {
-            if (((Enum<?>) value).name().equals(name)) return value;
+            if (((Enum<?>) value).name().equals(name)) {
+                return value;
+            }
         }
+
         throw new NoSuchFieldException(
                 "Estado NMS 1.20.1 no encontrado: " + name);
     }
