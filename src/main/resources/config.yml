@@ -9,6 +9,8 @@ security:
   min-password-length: 8
   max-password-length: 64
   max-attempts: 5
+  # Los intentos fallidos sobreviven a desconexiones dentro de esta ventana.
+  attempt-window-seconds: 600
   lock-minutes: 5
   login-timeout-seconds: 60
 
@@ -48,16 +50,18 @@ smart-auth:
 
   # SLogin solo omite /register y /login después de validar la sesión oficial
   # y comprobar que UUID + nombre coinciden con el perfil esperado.
-  session-timeout-ms: 5000
+  session-timeout-ms: 10000
 
   # Si Mojang no responde:
   # false = nombres no protegidos pueden seguir por login offline.
   # true  = se rechazan todos los logins hasta poder verificar.
   fail-closed-on-lookup-error: false
 
-  # /premium guarda el UUID Premium esperado y requiere reconectar para
-  # ejecutar el challenge de cifrado antes de PlayerJoinEvent.
-  premium-command-reconnect: true
+  # /premium se usa para migrar una cuenta local ya autenticada.
+  # El UUID Premium solo se guarda tras verificar la sesión con Mojang.
+  # No elimina la contraseña local al detectar un nombre coincidente.
+  # Una cuenta cracked con nombre Premium puede requerir otro nombre si
+  # el challenge está activado; el cliente offline no puede probar Premium.
 
 # Mensajes editables. El idioma activo se elige arriba con language: es/en.
 messages:
