@@ -59,6 +59,7 @@ public final class Paper1201SmartAuthAdapter {
             enabled = true;
             ChannelInitializeListenerHolder.addListener(INITIALIZER_KEY, this::install);
             logger.info("SLogin Smart Auth activo para online-mode=false.");
+            debug("Interceptor Premium registrado.");
             return true;
         } catch (Throwable failure) {
             enabled = false;
@@ -95,6 +96,7 @@ public final class Paper1201SmartAuthAdapter {
                 // Paper may invoke the initializer before packet_handler exists.
                 // If it exists, place SLogin directly before it. Otherwise append
                 // SLogin now; packet_handler will be appended after us.
+                debug("Inicializando canal de login: " + channel.id());
                 if (channel.pipeline().get("packet_handler") != null) {
                     channel.pipeline().addBefore(
                             "packet_handler", HANDLER_NAME, new LoginInterceptor(channel));
@@ -151,6 +153,7 @@ public final class Paper1201SmartAuthAdapter {
             }
 
             if (expected != null) {
+                debug("UUID Premium conocido para " + hello.name() + ": " + expected);
                 try {
                     beginPremiumChallenge(hello, expected);
                 } catch (Throwable failure) {
@@ -182,7 +185,11 @@ public final class Paper1201SmartAuthAdapter {
                             continueOffline(ctx, originalPacket);
                         }
                     }
-                    case PREMIUM -> beginPremiumChallenge(hello, result.profileId());
+                    case PREMIUM -> {
+                        debug("Perfil Premium detectado para " + hello.name()
+                                + ": " + result.profileId());
+                        beginPremiumChallenge(hello, result.profileId());
+                    }
                 }
             } catch (Throwable failure) {
                 failPremium(hello.name(), failure);
@@ -228,6 +235,7 @@ public final class Paper1201SmartAuthAdapter {
                     keyPair, login, stateField, profileField
             );
 
+            debug("Enviando Encryption Request a " + hello.name());
             connection.send(new ClientboundHelloPacket(
                     serverId,
                     keyPair.getPublic().getEncoded(),
@@ -252,6 +260,7 @@ public final class Paper1201SmartAuthAdapter {
                     throw new SecurityException("El nonce RSA no coincide.");
                 }
 
+                debug("Encryption Response recibido de " + attempt.name());
                 SecretKey sharedSecret = packet.getSecretKey(attempt.keyPair().getPrivate());
                 String serverHash = MinecraftSessionService.createServerHash(
                         attempt.serverId(), sharedSecret, attempt.keyPair().getPublic());
@@ -262,6 +271,7 @@ public final class Paper1201SmartAuthAdapter {
                         enumConstant(attempt.stateField().getType(), "AUTHENTICATING")
                 );
 
+                debug("Consultando hasJoined para " + attempt.name());
                 plugin.getSessionService()
                         .hasJoined(attempt.name(), serverHash)
                         .whenComplete((profile, error) ->
@@ -311,6 +321,7 @@ public final class Paper1201SmartAuthAdapter {
                                 System.currentTimeMillis() + VERIFIED_TICKET_TTL_MS)
                 );
 
+                debug("hasJoined confirmó UUID " + verified.uuid());
                 logger.info("SLogin verificó Premium: "
                         + verified.name() + " (" + verified.uuid() + ")");
                 resume(channel);
@@ -380,6 +391,12 @@ public final class Paper1201SmartAuthAdapter {
         }
 
         throw new IllegalStateException("Estado NMS no encontrado: " + name);
+    }
+
+    private void debug(String message) {
+        if (plugin.getConfig().getBoolean("smart-auth.debug", false)) {
+            logger.info("[SmartAuth] " + message);
+        }
     }
 
     private static String normalize(String name) {
