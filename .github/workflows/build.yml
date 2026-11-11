@@ -59,7 +59,9 @@ jobs:
           simulation-distance=2
           spawn-protection=0
           enable-query=false
-          enable-rcon=false
+          enable-rcon=true
+          rcon.port=25580
+          rcon.password=slogin-ci-ephemeral
           motd=SLogin CI
           EOF
 
@@ -319,8 +321,73 @@ jobs:
               )
           PY
 
-          grep -q "SLogin v1.7.0" server.log
+          # Exercise the actual Bukkit command dispatch through vanilla RCON
+          # (not just plugin.yml metadata). Admin location commands must be
+          # callable, including from console for read/remove operations.
+          python3 - <<'PY_RCON'
+          import socket
+          import struct
+
+          def read_exact(sock, n):
+              data = bytearray()
+              while len(data) < n:
+                  piece = sock.recv(n - len(data))
+                  if not piece:
+                      raise RuntimeError("RCON connection unexpectedly closed")
+                  data += piece
+              return bytes(data)
+
+          def send_rcon(sock, request_id, packet_type, message):
+              body = struct.pack("<ii", request_id, packet_type)
+              body += message.encode("utf-8") + b"\x00\x00"
+              sock.sendall(struct.pack("<i", len(body)) + body)
+
+          def recv_rcon(sock):
+              length = struct.unpack("<i", read_exact(sock, 4))[0]
+              if length < 10 or length > 65536:
+                  raise RuntimeError(f"Invalid RCON response size: {length}")
+              body = read_exact(sock, length)
+              request_id, packet_type = struct.unpack_from("<ii", body)
+              return request_id, packet_type, body[8:-2].decode("utf-8", "replace")
+
+          with socket.create_connection(("127.0.0.1", 25580), timeout=10) as sock:
+              sock.settimeout(10)
+              send_rcon(sock, 100, 3, "slogin-ci-ephemeral")
+              auth_id, _, _ = recv_rcon(sock)
+              if auth_id != 100:
+                  raise SystemExit("RCON authentication failed")
+
+              for request_id, command, required in [
+                  (101, "slogin status", "SLOGIN"),
+                  (102, "slogin help", "SLOGIN"),
+                  (103, "slogin spawnlogin show", "spawnlogin"),
+                  (104, "slogin loginready show", "loginready"),
+                  (105, "slogin spawnlogin delete", "spawnlogin"),
+                  (106, "slogin loginready delete", "loginready"),
+              ]:
+                  send_rcon(sock, request_id, 2, command)
+                  got_id, _, result = recv_rcon(sock)
+                  if got_id != request_id or required.lower() not in result.lower():
+                      raise SystemExit(
+                          f"RCON command failed: /{command} "
+                          f"(id={got_id}, response={result!r})"
+                      )
+                  print(f"SLogin RCON command test OK: /{command}")
+          PY_RCON
+
+          grep -q "SLogin v1.8.0" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
+
+          # Command-map smoke test: every public/admin command must have
+          # actually resolved from plugin.yml and received its executor.
+          for COMMAND in register login changepass premium slogin; do
+            if ! grep -q "Comando registrado: /$COMMAND" server.log; then
+              cat server.log
+              echo "SLogin failed to register /$COMMAND"
+              exit 1
+            fi
+          done
+          echo "SLogin command registration smoke test: 5/5 registered."
 
           if grep -E "Error occurred while enabling SLogin|Could not load.*SLogin|\[SLogin\].*(SEVERE|ERROR)" server.log; then
             cat server.log
@@ -349,6 +416,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SLogin-1.7.0
-          path: build/libs/SLogin-1.7.0.jar
+          name: SLogin-1.8.0
+          path: build/libs/SLogin-1.8.0.jar
           if-no-files-found: error

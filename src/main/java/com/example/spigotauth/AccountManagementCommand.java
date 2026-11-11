@@ -2,13 +2,15 @@ package com.example.spigotauth;
 
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.TabCompleter;
+import java.util.List;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.Map;
 import java.util.UUID;
 
-public final class AccountManagementCommand implements CommandExecutor {
+public final class AccountManagementCommand implements CommandExecutor, TabCompleter {
 
     private final SpigotAuth plugin;
 
@@ -121,4 +123,11 @@ public final class AccountManagementCommand implements CommandExecutor {
         // session verification succeeds.
         return true;
     }
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command,
+                                      String alias, String[] args) {
+        // Never suggest player names or old passwords for credential commands.
+        return List.of();
+    }
+
 }

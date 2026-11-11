@@ -14,7 +14,11 @@ public final class AuthManager {
 
     private final SpigotAuth plugin;
     private final Set<UUID> authenticated = ConcurrentHashMap.newKeySet();
-    private final Map<UUID, Integer> failures = new ConcurrentHashMap<>();
+    private record FailedAttempts(int count, long lastAttemptMillis) {}
+
+    // Attempt counters are tied to account + IP and deliberately survive
+    // disconnects; reconnecting must not reset password rate limiting.
+    private final Map<String, FailedAttempts> failures = new ConcurrentHashMap<>();
     private final Map<String, Long> locked = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> timeoutTasks = new ConcurrentHashMap<>();
 
@@ -29,16 +33,20 @@ public final class AuthManager {
     public void markAuthenticated(Player player) {
         UUID id = player.getUniqueId();
         authenticated.add(id);
-        failures.remove(id);
+        failures.remove(lockKey(player));
         locked.remove(lockKey(player));
         cancelTimeout(id);
         plugin.getPreAuthGuard().deactivate(player);
+        if (plugin.getConfig().getBoolean("teleports.after-auth-to-loginready", true)) {
+            plugin.getLoginLocations().teleport(player, LoginLocationStore.Spot.LOGINREADY);
+        }
     }
 
     public void clear(Player player) {
         UUID id = player.getUniqueId();
         authenticated.remove(id);
-        failures.remove(id);
+        // Keep failed attempts across reconnects until the attempt window
+        // expires or the user successfully authenticates.
         cancelTimeout(id);
         plugin.getPreAuthGuard().deactivate(player);
     }
@@ -82,54 +90,53 @@ public final class AuthManager {
         );
     }
 
+    static int nextFailureCount(int previousCount, long previousAt,
+                                long now, long windowMillis) {
+        return previousAt <= 0L || now - previousAt >= windowMillis
+                ? 1
+                : previousCount + 1;
+    }
+
     public void registerFailure(Player player) {
-        int max = Math.max(
-                1,
-                plugin.getConfig().getInt("security.max-attempts", 5)
-        );
+        int max = Math.max(1, Math.min(20,
+                plugin.getConfig().getInt("security.max-attempts", 5)));
 
-        int count = failures.merge(
-                player.getUniqueId(),
-                1,
-                Integer::sum
-        );
+        long minutes = Math.max(1L, Math.min(1440L,
+                plugin.getConfig().getLong("security.lock-minutes", 5)));
 
-        if (count >= max) {
-            long minutes = Math.max(
-                    1L,
-                    plugin.getConfig().getLong("security.lock-minutes", 5)
-            );
+        long windowSeconds = Math.max(30L, Math.min(3600L,
+                plugin.getConfig().getLong("security.attempt-window-seconds", 600)));
+        long windowMillis = windowSeconds * 1000L;
+        long now = System.currentTimeMillis();
 
-            long lockMillis = Math.multiplyExact(minutes, 60_000L);
-            locked.put(
-                    lockKey(player),
-                    System.currentTimeMillis() + lockMillis
-            );
-            failures.remove(player.getUniqueId());
+        String key = lockKey(player);
+        FailedAttempts attempt = failures.compute(key, (unused, previous) -> {
+            int count = previous == null
+                    ? 1
+                    : nextFailureCount(previous.count(),
+                            previous.lastAttemptMillis(), now, windowMillis);
+            return new FailedAttempts(count, now);
+        });
 
-            player.kickPlayer(
-                    plugin.getMessages().format(
-                            "auth.locked-kick",
-                            Map.of("minutes", minutes)
-                    )
-            );
+        if (failures.size() > 8192) {
+            failures.entrySet().removeIf(entry ->
+                    now - entry.getValue().lastAttemptMillis() > windowMillis);
+        }
+
+        if (attempt.count() >= max) {
+            locked.put(key, now + minutes * 60_000L);
+            failures.remove(key);
+            player.kickPlayer(plugin.getMessages().format(
+                    "auth.locked-kick", Map.of("minutes", minutes)));
         } else {
-            plugin.getMessages().send(
-                    player,
-                    "auth.wrong-password",
-                    Map.of("remaining", max - count)
-            );
+            plugin.getMessages().send(player, "auth.wrong-password",
+                    Map.of("remaining", max - attempt.count()));
         }
     }
 
     public void startTimeout(Player player) {
-        long seconds = Math.max(
-                10L,
-                plugin.getConfig().getLong(
-                        "security.login-timeout-seconds",
-                        60
-                )
-        );
+        long seconds = Math.max(10L, Math.min(600L,
+                plugin.getConfig().getLong("security.login-timeout-seconds", 60)));
 
         UUID playerId = player.getUniqueId();
         cancelTimeout(playerId);

@@ -91,6 +91,9 @@ public final class AuthListener implements Listener {
         }
 
         plugin.getPreAuthGuard().activate(player);
+        if (plugin.getConfig().getBoolean("teleports.on-join-to-spawnlogin", true)) {
+            plugin.getLoginLocations().teleport(player, LoginLocationStore.Spot.SPAWNLOGIN);
+        }
         plugin.getAuth().startTimeout(player);
 
         long timeout = plugin.getConfig().getLong("security.login-timeout-seconds", 60);
@@ -155,20 +158,29 @@ public final class AuthListener implements Listener {
         }
 
         String command = raw.substring(1).split("\\s+", 2)[0];
-        int namespace = command.indexOf(':');
-        if (namespace >= 0) command = command.substring(namespace + 1);
-        command = command.toLowerCase(Locale.ROOT);
-
-        if (!ALLOWED_COMMANDS.contains(command)) {
+        if (!isAllowedPreAuthCommand(command)) {
             event.setCancelled(true);
         }
+    }
+
+    static boolean isAllowedPreAuthCommand(String rawCommand) {
+        if (rawCommand == null || rawCommand.isBlank()) return false;
+        String value = rawCommand.toLowerCase(Locale.ROOT);
+        int separator = value.indexOf(':');
+        if (separator >= 0) {
+            // Only SLogin's own Bukkit fallback namespaced commands are safe.
+            if (!value.substring(0, separator).equals("slogin")) return false;
+            value = value.substring(separator + 1);
+            if (value.contains(":")) return false;
+        }
+        return ALLOWED_COMMANDS.contains(value);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onCommandList(PlayerCommandSendEvent event) {
         if (!blocked(event.getPlayer())) return;
         event.getCommands().removeIf(command ->
-                !ALLOWED_COMMANDS.contains(command.toLowerCase(Locale.ROOT)));
+                !isAllowedPreAuthCommand(command));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
