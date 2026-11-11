@@ -21,8 +21,9 @@ commands:
     description: Mark your own account for Premium verification.
     usage: /premium
   slogin:
-    description: SLogin administration.
-    usage: /slogin <reload|status>
+    description: SLogin management, diagnostics, and login spawn locations.
+    usage: /slogin <help|status|reload|spawnlogin|loginready>
+    aliases: [sloginadmin]
 permissions:
   slogin.admin:
     description: Allows SLogin administration commands.
