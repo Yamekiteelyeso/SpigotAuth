@@ -87,6 +87,13 @@ jobs:
               verified: true
           EOF
 
+          # A local account with a Premium nickname must stay on the local
+          # password path until its owner explicitly runs /premium.
+          cat > "$SERVER_DIR/plugins/SLogin/accounts.yml" <<'EOF'
+          accounts:
+            jeb_: "placeholder-hash-not-used-by-this-protocol-smoke-test"
+          EOF
+
           cd "$SERVER_DIR"
           tail -f /dev/null | java -Xms512M -Xmx1G -jar paper.jar nogui \
             > server.log 2>&1 &
@@ -236,6 +243,38 @@ jobs:
                   "SLogin protocol smoke test: valid Encryption Request "
                   f"(serverId={server_id!r}, publicKey={len(public_key)} bytes, "
                   f"challenge={len(challenge)} bytes)."
+              )
+
+          # A local registered account must remain on the offline/password
+          # path even when its nickname belongs to a real Premium account.
+          with socket.create_connection((HOST, PORT), timeout=10) as sock:
+              sock.settimeout(10)
+
+              handshake = (
+                  varint(0x00)
+                  + varint(PROTOCOL)
+                  + mc_string(HOST)
+                  + struct.pack(">H", PORT)
+                  + varint(2)
+              )
+              send_packet(sock, handshake)
+
+              login_start = varint(0x00) + mc_string("jeb_") + b"\x00"
+              send_packet(sock, login_start)
+
+              packet_length = read_varint(sock)
+              payload = recv_exact(sock, packet_length)
+              packet_id, _ = decode_varint(payload)
+
+              if packet_id == 0x01:
+                  raise SystemExit(
+                      "Local registered account jeb_ incorrectly received "
+                      "a Premium Encryption Request."
+                  )
+
+              print(
+                  "SLogin protocol smoke test: registered local Premium-name "
+                  f"account stayed on local auth path (first packet=0x{packet_id:02x})."
               )
           PY
 
