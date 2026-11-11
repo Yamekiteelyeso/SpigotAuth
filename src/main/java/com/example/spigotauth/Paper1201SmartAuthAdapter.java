@@ -296,7 +296,7 @@ public final class Paper1201SmartAuthAdapter {
 
             // Recreates only the parts of vanilla handleHello required before
             // handleKey. The profile stays null until Mojang proves ownership.
-            loginAccess.initializeHello(login, hello.name());
+            loginAccess.beginKeyExchange(login, hello.name());
 
             premiumAttempt = new PremiumAttempt(
                     hello.name(),
@@ -415,15 +415,16 @@ public final class Paper1201SmartAuthAdapter {
                 return;
             }
 
-            // Keep the remainder of the login on the server thread and let
-            // Paper's own 1.20.1 method perform its VERIFYING transition.
-            // The Authlib GameProfile is passed through intact, including
-            // properties such as signed textures.
+            // Keep the remainder of the login on the server thread and hand
+            // the verified profile back to the legacy 1.20.1
+            // READY_TO_ACCEPT state. Paper's tick then performs the normal
+            // whitelist/ban/full-server/duplicate-login path. The Authlib
+            // GameProfile is passed through intact, including signed textures.
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 if (!channel.isActive()) return;
 
                 try {
-                    loginAccess.startClientVerification(
+                    loginAccess.readyToAccept(
                             attempt.login(),
                             verified
                     );
