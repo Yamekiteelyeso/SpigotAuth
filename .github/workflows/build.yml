@@ -209,7 +209,7 @@ jobs:
               print("SLogin protocol smoke test: Encryption Request received.")
           PY
 
-          grep -q "SLogin v1.4.0" server.log
+          grep -q "SLogin v1.5.0" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
 
           if grep -E "Error occurred while enabling SLogin|Could not load.*SLogin|\[SLogin\].*(SEVERE|ERROR)" server.log; then
@@ -227,6 +227,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SLogin-1.4.0
-          path: build/libs/*.jar
+          name: SLogin-1.5.0
+          path: build/libs/SLogin-1.5.0.jar
           if-no-files-found: error
