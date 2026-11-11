@@ -30,7 +30,7 @@ public final class AuthManager {
         authenticated.add(id);
         failures.remove(id);
         cancelTimeout(id);
-
+        plugin.getPreAuthGuard().deactivate(player);
     }
 
     public void clear(Player player) {
@@ -38,6 +38,7 @@ public final class AuthManager {
         authenticated.remove(id);
         failures.remove(id);
         cancelTimeout(id);
+        plugin.getPreAuthGuard().forget(player);
     }
 
     public void shutdown() {
