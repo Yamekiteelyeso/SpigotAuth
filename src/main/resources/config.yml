@@ -12,6 +12,13 @@ security:
   lock-minutes: 5
   login-timeout-seconds: 60
 
+# Destinos opcionales para las fases de autenticación. No crean un punto
+# automáticamente; usa /slogin spawnlogin y /slogin loginready para guardarlos.
+# Se almacenan en plugins/SLogin/locations.yml (incluye mundo y orientación).
+teleports:
+  on-join-to-spawnlogin: true
+  after-auth-to-loginready: true
+
 # Cache del lookup de perfiles Java.
 premium-cache-minutes: 10
 
@@ -137,8 +144,25 @@ messages:
       save-error: "{prefix}&cNo se pudo guardar la nueva contraseña."
       success: "{prefix}&a✔ Contraseña cambiada correctamente."
     admin:
-      reload-ok: "{prefix}&aConfiguración recargada. Idioma activo: &f{language}&a."
-      no-permission: "{prefix}&cNo tienes permiso."
+      reload-ok: "{prefix}&a✓ &fConfiguración recargada. Idioma: &b{language}&f."
+      no-permission: "{prefix}&cNo tienes permiso para administrar SLogin."
+      usage: "{prefix}&eUso: &f/slogin <help|status|reload|spawnlogin|loginready>"
+      help-header: "&8&m----------------------------------------"
+      help-commands: "&b&lSLOGIN &8• &fComandos administrativos: &7/slogin status, /slogin reload"
+      help-spawnlogin: "&b/slogin spawnlogin &8[set|show|delete|tp] &7Punto para jugadores sin autenticar."
+      help-loginready: "&b/slogin loginready &8[set|show|delete|tp] &7Punto después de iniciar sesión."
+      help-location-actions: "&7Sin argumentos se guarda el bloque bajo tus pies. &fset &7edita, &fdelete &7borra, &fshow &7consulta, &ftp &7teletransporta."
+      location-set: "{prefix}&a✓ &7Punto &f{type} &7guardado en el bloque donde estás, mundo &f{world}&7."
+      location-removed: "{prefix}&a✓ &7Punto &f{type} &7borrado. Ya no se teletransportará a ese destino."
+      location-unset: "{prefix}&eEl punto &f{type} &eno está configurado."
+      location-save-error: "{prefix}&cError al guardar locations.yml. Revisa los permisos de escritura."
+      location-info: "{prefix}&b{type}&7: mundo &f{world} &8| &7X &f{x} &7Y &f{y} &7Z &f{z}"
+      location-teleported: "{prefix}&a✓ &7Teletransportado a &f{type}&7."
+      location-unavailable: "{prefix}&cNo se puede teletransportar a &f{type}&c. Comprueba el mundo y la ubicación."
+      status-header: "&8&m----------------------------------------"
+      status-server: "&b&lSLOGIN &f{version} &8| &7Minecraft &f{minecraft} &8| &7online-mode: &f{online}"
+      status-premium: "&7Smart Auth: &f{state} &8| &7Premium registrado: &f{auto} &8| &7Lookup: &f{lookup}"
+      status-locations: "&7spawnlogin: &f{login} &8| &7loginready: &f{ready}"
     console:
       player-only: "{prefix}&cEste comando solo se puede usar dentro del juego."
 
@@ -225,7 +249,24 @@ messages:
       save-error: "{prefix}&cThe new password could not be saved."
       success: "{prefix}&a✔ Password changed successfully."
     admin:
-      reload-ok: "{prefix}&aConfiguration reloaded. Active language: &f{language}&a."
-      no-permission: "{prefix}&cYou do not have permission."
+      reload-ok: "{prefix}&a✓ &fConfiguration reloaded. Language: &b{language}&f."
+      no-permission: "{prefix}&cYou do not have permission to manage SLogin."
+      usage: "{prefix}&eUsage: &f/slogin <help|status|reload|spawnlogin|loginready>"
+      help-header: "&8&m----------------------------------------"
+      help-commands: "&b&lSLOGIN &8• &fAdmin commands: &7/slogin status, /slogin reload"
+      help-spawnlogin: "&b/slogin spawnlogin &8[set|show|delete|tp] &7Unauthenticated spawn."
+      help-loginready: "&b/slogin loginready &8[set|show|delete|tp] &7After-login destination."
+      help-location-actions: "&7No arguments saves the block you're standing on. &fset &7edits, &fdelete &7removes, &fshow &7displays, &ftp &7teleports."
+      location-set: "{prefix}&a✓ &7Location &f{type} &7saved at your feet in &f{world}&7."
+      location-removed: "{prefix}&a✓ &7Location &f{type} &7removed. Teleports to this location are disabled."
+      location-unset: "{prefix}&eLocation &f{type} &eis not configured."
+      location-save-error: "{prefix}&cCould not save locations.yml. Check file permissions."
+      location-info: "{prefix}&b{type}&7: world &f{world} &8| &7X &f{x} &7Y &f{y} &7Z &f{z}"
+      location-teleported: "{prefix}&a✓ &7Teleported to &f{type}&7."
+      location-unavailable: "{prefix}&cCannot teleport to &f{type}&c. Check the configured world and location."
+      status-header: "&8&m----------------------------------------"
+      status-server: "&b&lSLOGIN &f{version} &8| &7Minecraft &f{minecraft} &8| &7online-mode: &f{online}"
+      status-premium: "&7Smart Auth: &f{state} &8| &7Registered Premium: &f{auto} &8| &7Lookup: &f{lookup}"
+      status-locations: "&7spawnlogin: &f{login} &8| &7loginready: &f{ready}"
     console:
       player-only: "{prefix}&cThis command can only be used in-game."
