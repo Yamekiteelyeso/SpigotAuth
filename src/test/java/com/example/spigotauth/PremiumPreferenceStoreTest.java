@@ -27,6 +27,37 @@ class PremiumPreferenceStoreTest {
     }
 
     @Test
+    void migrationWithoutLookupRequiresSessionVerification() {
+        var file = tempDir.resolve("unresolved.yml").toFile();
+        var store = new PremiumPreferenceStore(file, Logger.getLogger("test"));
+
+        assertTrue(store.requestUnresolved("PremiumUser"));
+        assertTrue(store.isPending("premiumuser"));
+        assertNull(store.expectedUuid("PremiumUser"));
+        assertFalse(store.isVerified("PremiumUser"));
+
+        // Pending status must survive a full plugin restart.
+        var restored = new PremiumPreferenceStore(file, Logger.getLogger("test"));
+        assertTrue(restored.isPending("PremiumUser"));
+        UUID verifiedUuid = UUID.randomUUID();
+        assertTrue(restored.confirm("PremiumUser", verifiedUuid));
+        assertFalse(restored.isPending("PremiumUser"));
+        assertTrue(restored.isVerified("PremiumUser"));
+        assertEquals(verifiedUuid, restored.expectedUuid("premiumuser"));
+    }
+
+    @Test
+    void unsuccessfulPendingMigrationCanBeCancelled() {
+        var store = new PremiumPreferenceStore(
+                tempDir.resolve("pending-cancel.yml").toFile(), Logger.getLogger("test"));
+        assertTrue(store.requestUnresolved("PremiumUser"));
+        assertTrue(store.isPending("PremiumUser"));
+        assertTrue(store.clear("PremiumUser"));
+        assertFalse(store.isPending("PremiumUser"));
+        assertNull(store.expectedUuid("PremiumUser"));
+    }
+
+    @Test
     void pendingPreferenceCanBeRolledBack() {
         var store = new PremiumPreferenceStore(
                 tempDir.resolve("prefs-rollback.yml").toFile(),
