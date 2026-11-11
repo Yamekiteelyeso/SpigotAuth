@@ -91,6 +91,9 @@ public final class AuthListener implements Listener {
         }
 
         plugin.getPreAuthGuard().activate(player);
+        if (plugin.getConfig().getBoolean("teleports.on-join-to-spawnlogin", true)) {
+            plugin.getLoginLocations().teleport(player, LoginLocationStore.Spot.SPAWNLOGIN);
+        }
         plugin.getAuth().startTimeout(player);
 
         long timeout = plugin.getConfig().getLong("security.login-timeout-seconds", 60);
