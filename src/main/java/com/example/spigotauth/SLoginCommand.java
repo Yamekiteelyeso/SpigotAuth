@@ -14,7 +14,7 @@ import java.util.Map;
 public final class SLoginCommand implements CommandExecutor, TabCompleter {
 
     private static final List<String> ROOT = List.of(
-            "help", "status", "reload", "spawnlogin", "loginready", "premiumcancel"
+            "help", "status", "reload", "spawnlogin", "loginready", "premiumcancel", "premiumcheck"
     );
     private static final List<String> LOCATION_ACTIONS = List.of(
             "set", "show", "delete", "tp"
@@ -50,6 +50,27 @@ public final class SLoginCommand implements CommandExecutor, TabCompleter {
             case "status" -> {
                 if (args.length != 1) return usage(sender);
                 sendStatus(sender);
+                return true;
+            }
+            case "premiumcheck" -> {
+                if (args.length != 2 || !args[1].matches("[A-Za-z0-9_]{3,16}")) {
+                    plugin.getMessages().send(sender, "admin.premium-check-usage");
+                    return true;
+                }
+                String name = args[1];
+                plugin.getMessages().send(sender, "admin.premium-check-start",
+                        Map.of("player", name));
+                plugin.getPremium().check(name, result -> {
+                    String path = switch (result.status()) {
+                        case PREMIUM -> "admin.premium-check-found";
+                        case NOT_FOUND -> "admin.premium-check-missing";
+                        case UNAVAILABLE -> "admin.premium-check-unavailable";
+                    };
+                    plugin.getMessages().send(sender, path,
+                            Map.of("player", name,
+                                   "uuid", result.profileId() == null
+                                           ? "N/A" : result.profileId()));
+                });
                 return true;
             }
             case "premiumcancel" -> {
@@ -170,6 +191,7 @@ public final class SLoginCommand implements CommandExecutor, TabCompleter {
         plugin.getMessages().send(sender, "admin.help-loginready");
         plugin.getMessages().send(sender, "admin.help-location-actions");
         plugin.getMessages().send(sender, "admin.help-premium-cancel");
+        plugin.getMessages().send(sender, "admin.help-premium-check");
     }
 
     private void sendStatus(CommandSender sender) {
