@@ -34,7 +34,7 @@ public final class SLoginCommand implements CommandExecutor {
 
             sender.sendMessage("§8§m--------------------------------");
             sender.sendMessage("§bSLogin §fRuntime Status");
-            sender.sendMessage("§7Version: §f1.5.0");
+            sender.sendMessage("§7Version: §f" + plugin.getDescription().getVersion());
             sender.sendMessage("§7Minecraft: §f" + plugin.getServer().getMinecraftVersion());
             sender.sendMessage("§7Server: §f" + plugin.getServer().getName());
             sender.sendMessage("§7online-mode: §f" + plugin.getServer().getOnlineMode());
