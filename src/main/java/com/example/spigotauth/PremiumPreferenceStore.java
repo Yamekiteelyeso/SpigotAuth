@@ -58,6 +58,24 @@ public final class PremiumPreferenceStore {
         return write(name, verifiedUuid, true);
     }
 
+    public synchronized boolean clear(String name) {
+        if (name == null) return false;
+        String path = base(name);
+        Object old = data.get(path);
+        if (old == null) return true;
+
+        data.set(path, null);
+        try {
+            data.save(file);
+            return true;
+        } catch (IOException exception) {
+            data.set(path, old);
+            logger.severe("No se pudo limpiar la preferencia Premium de "
+                    + name + ": " + exception.getMessage());
+            return false;
+        }
+    }
+
     private boolean write(String name, UUID uuid, boolean verified) {
         if (name == null || uuid == null || !name.matches("[A-Za-z0-9_]{3,16}")) return false;
 
