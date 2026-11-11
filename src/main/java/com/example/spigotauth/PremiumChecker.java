@@ -14,13 +14,6 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Consulta el perfil público de Minecraft Java en Mojang.
- *
- * IMPORTANTE: encontrar un perfil por nombre no demuestra que el jugador conectado
- * sea su propietario. En servidores offline este resultado es informativo y nunca
- * debe utilizarse como método de autenticación.
- */
 public final class PremiumChecker {
 
     public enum Status {
@@ -31,8 +24,14 @@ public final class PremiumChecker {
 
     private record CacheEntry(Result result, long expiresAt) {}
 
-    private static final Pattern PROFILE_ID = Pattern.compile("\\\"id\\\"\\s*:\\s*\\\"([0-9a-fA-F]{32})\\\"");
+    private static final Pattern PROFILE_ID =
+            Pattern.compile("\"id\"\\s*:\\s*\"([0-9a-fA-F]{32})\"");
     private static final Pattern VALID_NAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
+
+    private static final String[] LOOKUP_ENDPOINTS = {
+            "https://api.minecraftservices.com/minecraft/profile/lookup/name/",
+            "https://api.mojang.com/users/profiles/minecraft/"
+    };
 
     private final SpigotAuth plugin;
     private final long cacheMillis;
@@ -57,46 +56,45 @@ public final class PremiumChecker {
         }
 
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-            Result result = queryMojang(name);
+            Result result = queryProfile(name);
             if (result.status() != Status.UNAVAILABLE && cacheMillis > 0) {
-                cache.put(key, new CacheEntry(result, System.currentTimeMillis() + cacheMillis));
+                cache.put(key, new CacheEntry(
+                        result, System.currentTimeMillis() + cacheMillis));
             }
+
             plugin.getServer().getScheduler().runTask(plugin, () -> {
-                if (!plugin.isEnabled()) return;
-                callback.accept(result);
+                if (plugin.isEnabled()) callback.accept(result);
             });
         });
     }
 
-    private Result queryMojang(String name) {
+    private Result queryProfile(String name) {
+        Result primary = queryEndpoint(LOOKUP_ENDPOINTS[0] + name);
+
+        // Minecraft Services is the primary authoritative lookup. A definitive
+        // PREMIUM/NOT_FOUND result does not need a second HTTP request.
+        if (primary.status() != Status.UNAVAILABLE) {
+            return primary;
+        }
+
+        // Legacy Mojang lookup is only a resilience fallback for outages,
+        // throttling or unexpected responses from the primary service.
+        return queryEndpoint(LOOKUP_ENDPOINTS[1] + name);
+    }
+
+    private Result queryEndpoint(String endpoint) {
         HttpURLConnection connection = null;
         try {
-            URL url = new URL("https://api.mojang.com/users/profiles/minecraft/" + name);
-            connection = (HttpURLConnection) url.openConnection();
+            connection = (HttpURLConnection) new URL(endpoint).openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(4000);
             connection.setReadTimeout(4000);
             connection.setRequestProperty("Accept", "application/json");
-            connection.setRequestProperty("User-Agent", "SpigotAuth/1.1");
+            connection.setRequestProperty("User-Agent", "SLogin/1.5");
 
             int status = connection.getResponseCode();
             if (status == HttpURLConnection.HTTP_OK) {
-                try (InputStream stream = connection.getInputStream();
-                     BufferedReader reader = new BufferedReader(
-                             new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-                    StringBuilder body = new StringBuilder();
-                    String line;
-                    while ((line = reader.readLine()) != null) body.append(line);
-
-                    Matcher matcher = PROFILE_ID.matcher(body);
-                    if (!matcher.find()) return new Result(Status.UNAVAILABLE, null);
-
-                    String rawId = matcher.group(1);
-                    String formattedId = rawId.replaceFirst(
-                            "([0-9a-fA-F]{8})([0-9a-fA-F]{4})([0-9a-fA-F]{4})([0-9a-fA-F]{4})([0-9a-fA-F]{12})",
-                            "$1-$2-$3-$4-$5");
-                    return new Result(Status.PREMIUM, UUID.fromString(formattedId));
-                }
+                return parse(connection.getInputStream());
             }
 
             if (status == HttpURLConnection.HTTP_NO_CONTENT
@@ -104,14 +102,31 @@ public final class PremiumChecker {
                 return new Result(Status.NOT_FOUND, null);
             }
 
-            // Rate limit, errores 5xx y respuestas inesperadas no significan "no premium".
             return new Result(Status.UNAVAILABLE, null);
         } catch (Exception exception) {
-            plugin.getLogger().fine("No se pudo consultar el perfil de Mojang: "
-                    + exception.getClass().getSimpleName());
+            plugin.getLogger().fine("Lookup Premium falló en "
+                    + endpoint + ": " + exception.getClass().getSimpleName());
             return new Result(Status.UNAVAILABLE, null);
         } finally {
             if (connection != null) connection.disconnect();
+        }
+    }
+
+    private static Result parse(InputStream stream) throws Exception {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            StringBuilder body = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) body.append(line);
+
+            Matcher matcher = PROFILE_ID.matcher(body);
+            if (!matcher.find()) return new Result(Status.UNAVAILABLE, null);
+
+            String rawId = matcher.group(1);
+            String formattedId = rawId.replaceFirst(
+                    "([0-9a-fA-F]{8})([0-9a-fA-F]{4})([0-9a-fA-F]{4})([0-9a-fA-F]{4})([0-9a-fA-F]{12})",
+                    "$1-$2-$3-$4-$5");
+            return new Result(Status.PREMIUM, UUID.fromString(formattedId));
         }
     }
 }

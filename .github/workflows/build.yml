@@ -20,8 +20,282 @@ jobs:
           gradle-version: '8.5'
       - name: Build and test
         run: gradle --no-daemon clean build
+
+      - name: Boot-test Paper 1.20.1 with online-mode=false
+        shell: bash
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+
+          SERVER_DIR="$PWD/build/paper-integration"
+          mkdir -p "$SERVER_DIR/plugins"
+
+          USER_AGENT="SLogin-CI/1.0 (https://github.com/Yamekiteelyeso/SpigotAuth)"
+          BUILDS=$(curl -fsSL \
+            -H "User-Agent: $USER_AGENT" \
+            "https://fill.papermc.io/v3/projects/paper/versions/1.20.1/builds")
+
+          PAPER_URL=$(echo "$BUILDS" | jq -r \
+            'first(.[] | select(.channel == "STABLE") | .downloads."server:default".url) // empty')
+
+          if [ -z "$PAPER_URL" ]; then
+            echo "No stable Paper 1.20.1 build was returned by PaperMC."
+            exit 1
+          fi
+
+          curl -fL \
+            -H "User-Agent: $USER_AGENT" \
+            "$PAPER_URL" \
+            -o "$SERVER_DIR/paper.jar"
+
+          echo "eula=true" > "$SERVER_DIR/eula.txt"
+
+          cat > "$SERVER_DIR/server.properties" <<'EOF'
+          online-mode=false
+          prevent-proxy-connections=false
+          server-port=25579
+          max-players=2
+          view-distance=2
+          simulation-distance=2
+          spawn-protection=0
+          enable-query=false
+          enable-rcon=false
+          motd=SLogin CI
+          EOF
+
+          PLUGIN_JAR=$(find build/libs -maxdepth 1 -type f \
+            -name '*.jar' \
+            ! -name '*-dev.jar' \
+            ! -name '*-sources.jar' \
+            | head -n 1)
+
+          if [ -z "$PLUGIN_JAR" ]; then
+            echo "No runnable SLogin jar was produced."
+            exit 1
+          fi
+
+          cp "$PLUGIN_JAR" "$SERVER_DIR/plugins/SLogin.jar"
+
+          # Seed one already-known Premium identity so this smoke test does not
+          # depend on the public profile lookup service. Ownership is NOT faked:
+          # we only test that SLogin enters the encryption-challenge path.
+          mkdir -p "$SERVER_DIR/plugins/SLogin"
+          cat > "$SERVER_DIR/plugins/SLogin/premium-preferences.yml" <<'EOF'
+          names:
+            notch:
+              uuid: "069a79f4-44e9-4726-a5be-fca90e38aaf5"
+              verified: true
+          EOF
+
+          # A local account with a Premium nickname must stay on the local
+          # password path until its owner explicitly runs /premium.
+          cat > "$SERVER_DIR/plugins/SLogin/accounts.yml" <<'EOF'
+          accounts:
+            jeb_: "placeholder-hash-not-used-by-this-protocol-smoke-test"
+          EOF
+
+          cd "$SERVER_DIR"
+          tail -f /dev/null | java -Xms512M -Xmx1G -jar paper.jar nogui \
+            > server.log 2>&1 &
+          SERVER_PID=$!
+
+          READY=0
+          for _ in $(seq 1 120); do
+            if grep -q 'Done (' server.log 2>/dev/null; then
+              READY=1
+              break
+            fi
+
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              break
+            fi
+
+            sleep 1
+          done
+
+          if [ "$READY" -ne 1 ]; then
+            cat server.log
+            kill "$SERVER_PID" 2>/dev/null || true
+            wait "$SERVER_PID" 2>/dev/null || true
+            echo "Paper did not reach the ready state."
+            exit 1
+          fi
+
+          # Protocol 763 (Minecraft 1.20.1): Handshake -> Login Start.
+          # The seeded Premium identity must receive Login Encryption Request
+          # packet id 0x01 even though server.properties uses online-mode=false.
+          python3 - <<'PY'
+          import socket
+          import struct
+
+          HOST = "127.0.0.1"
+          PORT = 25579
+          PROTOCOL = 763
+          USERNAME = "Notch"
+
+          def varint(value):
+              value &= 0xffffffff
+              out = bytearray()
+              while True:
+                  b = value & 0x7f
+                  value >>= 7
+                  if value:
+                      out.append(b | 0x80)
+                  else:
+                      out.append(b)
+                      return bytes(out)
+
+          def mc_string(value):
+              data = value.encode("utf-8")
+              return varint(len(data)) + data
+
+          def send_packet(sock, payload):
+              sock.sendall(varint(len(payload)) + payload)
+
+          def read_varint(sock):
+              result = 0
+              shift = 0
+              for _ in range(5):
+                  raw = sock.recv(1)
+                  if not raw:
+                      raise RuntimeError("connection closed while reading VarInt")
+                  byte = raw[0]
+                  result |= (byte & 0x7f) << shift
+                  if not (byte & 0x80):
+                      return result
+                  shift += 7
+              raise RuntimeError("VarInt too large")
+
+          def recv_exact(sock, count):
+              data = bytearray()
+              while len(data) < count:
+                  chunk = sock.recv(count - len(data))
+                  if not chunk:
+                      raise RuntimeError("connection closed while reading packet")
+                  data.extend(chunk)
+              return bytes(data)
+
+          def decode_varint(data, offset=0):
+              result = 0
+              shift = 0
+              pos = offset
+              for _ in range(5):
+                  byte = data[pos]
+                  pos += 1
+                  result |= (byte & 0x7f) << shift
+                  if not (byte & 0x80):
+                      return result, pos
+                  shift += 7
+              raise RuntimeError("packet id VarInt too large")
+
+          with socket.create_connection((HOST, PORT), timeout=10) as sock:
+              sock.settimeout(10)
+
+              handshake = (
+                  varint(0x00)
+                  + varint(PROTOCOL)
+                  + mc_string(HOST)
+                  + struct.pack(">H", PORT)
+                  + varint(2)
+              )
+              send_packet(sock, handshake)
+
+              # 1.20.1 ServerboundHelloPacket:
+              # packet id 0x00, username, Optional<UUID>.
+              login_start = varint(0x00) + mc_string(USERNAME) + b"\x00"
+              send_packet(sock, login_start)
+
+              packet_length = read_varint(sock)
+              payload = recv_exact(sock, packet_length)
+              packet_id, pos = decode_varint(payload)
+
+              if packet_id != 0x01:
+                  raise SystemExit(
+                      f"Expected Login Encryption Request 0x01, got 0x{packet_id:02x}"
+                  )
+
+              server_id_len, pos = decode_varint(payload, pos)
+              server_id = payload[pos:pos + server_id_len]
+              pos += server_id_len
+
+              public_key_len, pos = decode_varint(payload, pos)
+              public_key = payload[pos:pos + public_key_len]
+              pos += public_key_len
+
+              challenge_len, pos = decode_varint(payload, pos)
+              challenge = payload[pos:pos + challenge_len]
+              pos += challenge_len
+
+              if len(public_key) < 128:
+                  raise SystemExit(
+                      f"Encryption Request public key is too short: {len(public_key)}"
+                  )
+              if len(challenge) != 4:
+                  raise SystemExit(
+                      f"Expected 4-byte verify token, got {len(challenge)} bytes"
+                  )
+              if pos != len(payload):
+                  raise SystemExit(
+                      f"Unexpected trailing bytes in Encryption Request: {len(payload) - pos}"
+                  )
+
+              print(
+                  "SLogin protocol smoke test: valid Encryption Request "
+                  f"(serverId={server_id!r}, publicKey={len(public_key)} bytes, "
+                  f"challenge={len(challenge)} bytes)."
+              )
+
+          # A local registered account must remain on the offline/password
+          # path even when its nickname belongs to a real Premium account.
+          with socket.create_connection((HOST, PORT), timeout=10) as sock:
+              sock.settimeout(10)
+
+              handshake = (
+                  varint(0x00)
+                  + varint(PROTOCOL)
+                  + mc_string(HOST)
+                  + struct.pack(">H", PORT)
+                  + varint(2)
+              )
+              send_packet(sock, handshake)
+
+              login_start = varint(0x00) + mc_string("jeb_") + b"\x00"
+              send_packet(sock, login_start)
+
+              packet_length = read_varint(sock)
+              payload = recv_exact(sock, packet_length)
+              packet_id, _ = decode_varint(payload)
+
+              if packet_id == 0x01:
+                  raise SystemExit(
+                      "Local registered account jeb_ incorrectly received "
+                      "a Premium Encryption Request."
+                  )
+
+              print(
+                  "SLogin protocol smoke test: registered local Premium-name "
+                  f"account stayed on local auth path (first packet=0x{packet_id:02x})."
+              )
+          PY
+
+          grep -q "SLogin v1.5.0" server.log
+          grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
+
+          if grep -E "Error occurred while enabling SLogin|Could not load.*SLogin|\[SLogin\].*(SEVERE|ERROR)" server.log; then
+            cat server.log
+            kill "$SERVER_PID" 2>/dev/null || true
+            wait "$SERVER_PID" 2>/dev/null || true
+            echo "SLogin emitted a runtime error during the Paper boot test."
+            exit 1
+          fi
+
+          kill "$SERVER_PID" 2>/dev/null || true
+          wait "$SERVER_PID" 2>/dev/null || true
+
+          cat server.log
+
       - uses: actions/upload-artifact@v4
         with:
-          name: SLogin-1.3.0
-          path: build/libs/*.jar
+          name: SLogin-1.5.0
+          path: build/libs/SLogin-1.5.0.jar
           if-no-files-found: error

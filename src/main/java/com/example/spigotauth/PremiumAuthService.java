@@ -12,12 +12,20 @@ import java.util.Objects;
 public final class PremiumAuthService {
 
     private final SpigotAuth plugin;
-    private final PremiumAccountStore accounts;
+    private final PremiumAccountStore premiumAccounts;
+    private final PremiumPreferenceStore premiumPreferences;
+    private final AccountStore localAccounts;
     private final AuthManager auth;
 
-    public PremiumAuthService(SpigotAuth plugin, PremiumAccountStore accounts, AuthManager auth) {
+    public PremiumAuthService(SpigotAuth plugin,
+                              PremiumAccountStore premiumAccounts,
+                              PremiumPreferenceStore premiumPreferences,
+                              AccountStore localAccounts,
+                              AuthManager auth) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
-        this.accounts = Objects.requireNonNull(accounts, "accounts");
+        this.premiumAccounts = Objects.requireNonNull(premiumAccounts, "premiumAccounts");
+        this.premiumPreferences = Objects.requireNonNull(premiumPreferences, "premiumPreferences");
+        this.localAccounts = Objects.requireNonNull(localAccounts, "localAccounts");
         this.auth = Objects.requireNonNull(auth, "auth");
     }
 
@@ -33,12 +41,18 @@ public final class PremiumAuthService {
             return false;
         }
 
-        // This is NOT password registration. It only persists the verified
-        // Mojang UUID/name binding so the Premium identity stays protected.
-        if (!accounts.ensureAccount(profile.uuid(), profile.name())) {
+        if (!premiumAccounts.ensureAccount(profile.uuid(), profile.name())) {
             player.kickPlayer(plugin.getMessages().raw("premium.save-error"));
             return false;
         }
+
+        // Once protocol verification succeeds, future logins can challenge this
+        // exact UUID immediately without relying on the public profile lookup.
+        premiumPreferences.confirm(profile.name(), profile.uuid());
+
+        // A verified Premium identity must not keep a stale local password
+        // account that could later be mistaken for an alternate auth route.
+        localAccounts.remove(profile.name());
 
         auth.markAuthenticated(player);
         return true;

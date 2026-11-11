@@ -1,5 +1,5 @@
 name: SLogin
-version: 1.3.0
+version: 1.5.0
 main: com.example.spigotauth.SpigotAuth
 api-version: '1.20'
 author: Yamekiteelyeso
@@ -8,11 +8,18 @@ commands:
   register:
     description: Register an offline account.
     usage: /register <password> <confirm>
-    aliases: [reg]
+    aliases: [r, reg]
   login:
     description: Log in to an offline account.
     usage: /login <password>
-    aliases: [l]
+    aliases: [l, log]
+  changepass:
+    description: Change your local account password.
+    usage: /changepass <old-password> <new-password>
+    aliases: [changepassword]
+  premium:
+    description: Mark your own account for Premium verification.
+    usage: /premium
   slogin:
     description: SLogin administration.
     usage: /slogin reload

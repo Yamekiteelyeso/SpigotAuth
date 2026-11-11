@@ -1,29 +1,49 @@
 package com.example.spigotauth;
 
+import io.papermc.paper.event.player.AsyncChatEvent;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
+import org.bukkit.event.entity.FoodLevelChangeEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerCommandSendEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerGameModeChangeEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerPickupItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.PlayerVelocityEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
+import org.bukkit.projectiles.ProjectileSource;
 
 import java.util.Locale;
 import java.util.Set;
 
 public final class AuthListener implements Listener {
 
-    private static final Set<String> ALLOWED_COMMANDS = Set.of("login", "register", "slogin");
+    private static final Set<String> ALLOWED_COMMANDS = Set.of(
+            "login", "l", "log",
+            "register", "r", "reg"
+    );
+
     private final SpigotAuth plugin;
 
     public AuthListener(SpigotAuth plugin) {
@@ -38,6 +58,10 @@ public final class AuthListener implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         event.setJoinMessage(null);
+
+        // Existing unauthenticated players must also be visually masked for
+        // this newly joined viewer.
+        plugin.getPreAuthGuard().refreshViewer(player);
 
         if (plugin.getServer().getOnlineMode()) {
             plugin.getAuth().markAuthenticated(player);
@@ -57,7 +81,18 @@ public final class AuthListener implements Listener {
             return;
         }
 
+        // A previously verified Premium identity must never fall back to
+        // password registration/login if the protocol hook is missing or fails.
+        // The username alone is NOT proof of ownership.
+        if (plugin.getPremiumAccounts().isProtectedName(player.getName())
+                || plugin.getPremiumPreferences().isVerified(player.getName())) {
+            player.kickPlayer(plugin.getMessages().raw("premium.verification-start-error"));
+            return;
+        }
+
+        plugin.getPreAuthGuard().activate(player);
         plugin.getAuth().startTimeout(player);
+
         long timeout = plugin.getConfig().getLong("security.login-timeout-seconds", 60);
         if (plugin.getAccounts().isRegistered(player.getName())) {
             plugin.getMessages().sendLines(player, "login.prompt",
@@ -74,7 +109,7 @@ public final class AuthListener implements Listener {
         plugin.getAuth().clear(event.getPlayer());
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
         if (!blocked(player)) return;
@@ -82,9 +117,12 @@ public final class AuthListener implements Listener {
         Location from = event.getFrom();
         Location to = event.getTo();
         if (to == null) return;
-        if (from.getBlockX() == to.getBlockX()
-                && from.getBlockY() == to.getBlockY()
-                && from.getBlockZ() == to.getBlockZ()) return;
+
+        if (from.getX() == to.getX()
+                && from.getY() == to.getY()
+                && from.getZ() == to.getZ()) {
+            return; // Allow head rotation only.
+        }
 
         Location fixed = from.clone();
         fixed.setYaw(to.getYaw());
@@ -92,64 +130,163 @@ public final class AuthListener implements Listener {
         event.setTo(fixed);
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
-    public void onChat(AsyncPlayerChatEvent event) {
-        if (!blocked(event.getPlayer())) return;
-        event.setCancelled(true);
-        Player player = event.getPlayer();
-        plugin.getServer().getScheduler().runTask(plugin,
-                () -> plugin.getMessages().send(player, "auth.chat-blocked"));
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onModernChat(AsyncChatEvent event) {
+        if (blocked(event.getPlayer())) {
+            event.setCancelled(true);
+        }
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onLegacyChat(AsyncPlayerChatEvent event) {
+        if (blocked(event.getPlayer())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onCommand(PlayerCommandPreprocessEvent event) {
         if (!blocked(event.getPlayer())) return;
-        String message = event.getMessage();
-        String command = message.substring(1).split("\\s+", 2)[0];
+
+        String raw = event.getMessage();
+        if (raw.length() <= 1) {
+            event.setCancelled(true);
+            return;
+        }
+
+        String command = raw.substring(1).split("\\s+", 2)[0];
         int namespace = command.indexOf(':');
         if (namespace >= 0) command = command.substring(namespace + 1);
         command = command.toLowerCase(Locale.ROOT);
 
         if (!ALLOWED_COMMANDS.contains(command)) {
             event.setCancelled(true);
-            plugin.getMessages().send(event.getPlayer(), "auth.command-blocked");
         }
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onCommandList(PlayerCommandSendEvent event) {
+        if (!blocked(event.getPlayer())) return;
+        event.getCommands().removeIf(command ->
+                !ALLOWED_COMMANDS.contains(command.toLowerCase(Locale.ROOT)));
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onVelocity(PlayerVelocityEvent event) {
+        if (blocked(event.getPlayer())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onTeleport(PlayerTeleportEvent event) {
+        if (!blocked(event.getPlayer())) return;
+        if (event.getCause() != PlayerTeleportEvent.TeleportCause.PLUGIN) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onGameMode(PlayerGameModeChangeEvent event) {
+        if (blocked(event.getPlayer()) && event.getNewGameMode() != GameMode.SURVIVAL) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onBreak(BlockBreakEvent event) {
         if (blocked(event.getPlayer())) event.setCancelled(true);
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlace(BlockPlaceEvent event) {
         if (blocked(event.getPlayer())) event.setCancelled(true);
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onInteract(PlayerInteractEvent event) {
         if (blocked(event.getPlayer())) event.setCancelled(true);
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
-    public void onInventory(InventoryOpenEvent event) {
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInteractEntity(PlayerInteractEntityEvent event) {
+        if (blocked(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInventoryOpen(InventoryOpenEvent event) {
         if (event.getPlayer() instanceof Player player && blocked(player)) {
             event.setCancelled(true);
         }
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (event.getWhoClicked() instanceof Player player && blocked(player)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInventoryDrag(InventoryDragEvent event) {
+        if (event.getWhoClicked() instanceof Player player && blocked(player)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onDrop(PlayerDropItemEvent event) {
         if (blocked(event.getPlayer())) event.setCancelled(true);
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
-    public void onPickup(PlayerPickupItemEvent event) {
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPickup(EntityPickupItemEvent event) {
+        if (event.getEntity() instanceof Player player && blocked(player)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onConsume(PlayerItemConsumeEvent event) {
         if (blocked(event.getPlayer())) event.setCancelled(true);
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onSwapHands(PlayerSwapHandItemsEvent event) {
+        if (blocked(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onDamage(EntityDamageEvent event) {
+        if (event.getEntity() instanceof Player player && blocked(player)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onDamageByEntity(EntityDamageByEntityEvent event) {
+        if (event.getDamager() instanceof Player player && blocked(player)) {
+            event.setCancelled(true);
+            return;
+        }
+
+        if (event.getDamager() instanceof Projectile projectile) {
+            ProjectileSource shooter = projectile.getShooter();
+            if (shooter instanceof Player player && blocked(player)) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onTarget(EntityTargetLivingEntityEvent event) {
+        if (event.getTarget() instanceof Player player && blocked(player)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onFood(FoodLevelChangeEvent event) {
         if (event.getEntity() instanceof Player player && blocked(player)) {
             event.setCancelled(true);
         }
