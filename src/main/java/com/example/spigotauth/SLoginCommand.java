@@ -14,7 +14,7 @@ import java.util.Map;
 public final class SLoginCommand implements CommandExecutor, TabCompleter {
 
     private static final List<String> ROOT = List.of(
-            "help", "status", "reload", "spawnlogin", "loginready"
+            "help", "status", "reload", "spawnlogin", "loginready", "premiumcancel"
     );
     private static final List<String> LOCATION_ACTIONS = List.of(
             "set", "show", "delete", "tp"
@@ -50,6 +50,26 @@ public final class SLoginCommand implements CommandExecutor, TabCompleter {
             case "status" -> {
                 if (args.length != 1) return usage(sender);
                 sendStatus(sender);
+                return true;
+            }
+            case "premiumcancel" -> {
+                if (args.length != 2
+                        || !args[1].matches("[A-Za-z0-9_]{3,16}")) {
+                    plugin.getMessages().send(sender, "admin.premium-cancel-usage");
+                    return true;
+                }
+                String name = args[1];
+                if (!plugin.getPremiumPreferences().isPending(name)) {
+                    plugin.getMessages().send(sender, "admin.premium-cancel-not-pending",
+                            Map.of("player", name));
+                    return true;
+                }
+                if (plugin.getPremiumPreferences().clear(name)) {
+                    plugin.getMessages().send(sender, "admin.premium-cancel-ok",
+                            Map.of("player", name));
+                } else {
+                    plugin.getMessages().send(sender, "admin.premium-cancel-failed");
+                }
                 return true;
             }
             case "spawnlogin", "loginready" -> {
@@ -149,6 +169,7 @@ public final class SLoginCommand implements CommandExecutor, TabCompleter {
         plugin.getMessages().send(sender, "admin.help-spawnlogin");
         plugin.getMessages().send(sender, "admin.help-loginready");
         plugin.getMessages().send(sender, "admin.help-location-actions");
+        plugin.getMessages().send(sender, "admin.help-premium-cancel");
     }
 
     private void sendStatus(CommandSender sender) {
