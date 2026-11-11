@@ -40,6 +40,13 @@ class PluginMetadataTest {
         assertTrue(config.getLong("security.attempt-window-seconds") > 0);
         for (String locale : new String[]{"es", "en"}) {
             for (String key : new String[]{
+                    "admin.premium-check-usage",
+                    "admin.premium-check-start",
+                    "admin.premium-check-found",
+                    "admin.premium-check-missing",
+                    "admin.premium-check-unavailable",
+                    "premium.verification-invalid",
+                    "premium.verification-unavailable",
                     "admin.location-set",
                     "admin.location-removed",
                     "admin.location-unset",
