@@ -81,6 +81,15 @@ public final class AuthListener implements Listener {
             return;
         }
 
+        // A previously verified Premium identity must never fall back to
+        // password registration/login if the protocol hook is missing or fails.
+        // The username alone is NOT proof of ownership.
+        if (plugin.getPremiumAccounts().isProtectedName(player.getName())
+                || plugin.getPremiumPreferences().isVerified(player.getName())) {
+            player.kickPlayer(plugin.getMessages().raw("premium.verification-start-error"));
+            return;
+        }
+
         plugin.getPreAuthGuard().activate(player);
         plugin.getAuth().startTimeout(player);
 
