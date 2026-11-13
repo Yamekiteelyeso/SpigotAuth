@@ -14,7 +14,7 @@ import java.util.Map;
 public final class SLoginCommand implements CommandExecutor, TabCompleter {
 
     private static final List<String> ROOT = List.of(
-            "help", "status", "reload", "spawnlogin", "loginready", "premiumcancel", "premiumcheck"
+            "help", "status", "reload", "resetmessages", "spawnlogin", "loginready", "premiumcancel", "premiumcheck"
     );
     private static final List<String> LOCATION_ACTIONS = List.of(
             "set", "show", "delete", "tp"
@@ -45,6 +45,15 @@ public final class SLoginCommand implements CommandExecutor, TabCompleter {
                 plugin.reloadSLoginConfiguration();
                 plugin.getMessages().send(sender, "admin.reload-ok",
                         Map.of("language", plugin.getMessages().language()));
+                return true;
+            }
+            case "resetmessages" -> {
+                if (args.length != 1) return usage(sender);
+                if (plugin.restoreDefaultMessages()) {
+                    plugin.getMessages().send(sender, "admin.reset-messages-ok");
+                } else {
+                    plugin.getMessages().send(sender, "admin.reset-messages-failed");
+                }
                 return true;
             }
             case "status" -> {
@@ -192,6 +201,7 @@ public final class SLoginCommand implements CommandExecutor, TabCompleter {
         plugin.getMessages().send(sender, "admin.help-location-actions");
         plugin.getMessages().send(sender, "admin.help-premium-cancel");
         plugin.getMessages().send(sender, "admin.help-premium-check");
+        plugin.getMessages().send(sender, "admin.help-reset-messages");
     }
 
     private void sendStatus(CommandSender sender) {
