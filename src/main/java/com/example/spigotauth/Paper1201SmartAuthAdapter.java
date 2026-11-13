@@ -13,7 +13,7 @@ import net.minecraft.network.protocol.login.ServerboundHelloPacket;
 import net.minecraft.network.protocol.login.ServerboundKeyPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
-import org.bukkit.craftbukkit.v1_20_R1.CraftServer;
+import org.bukkit.craftbukkit.CraftServer;
 
 import javax.crypto.SecretKey;
 import java.net.InetAddress;
@@ -29,7 +29,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Selective Mojang authentication for Paper 1.20.1 servers running
+ * Selective Mojang authentication for Paper 26.3 servers running
  * online-mode=false.
  *
  * SLogin intercepts Login Start only for Premium candidates. Cracked players
@@ -57,12 +57,12 @@ public final class Paper1201SmartAuthAdapter {
     }
 
     public boolean enable() {
-        if (!"1.20.1".equals(plugin.getServer().getMinecraftVersion())) {
-            logger.severe("SLogin Smart Auth requiere exactamente Paper 1.20.1.");
+        if (!"26.3".equals(plugin.getServer().getMinecraftVersion())) {
+            logger.severe("SLogin Smart Auth requiere exactamente Paper 26.3.");
             return false;
         }
         if (!(plugin.getServer() instanceof CraftServer)) {
-            logger.severe("SLogin Smart Auth requiere Paper/CraftBukkit 1.20.1.");
+            logger.severe("SLogin Smart Auth requiere Paper/CraftBukkit 26.3.");
             return false;
         }
         if (plugin.getServer().getOnlineMode()) {
@@ -74,13 +74,13 @@ public final class Paper1201SmartAuthAdapter {
             loginAccess = Paper1201LoginAccess.resolve();
 
             // Fail at startup if this Paper build does not expose the exact
-            // encryption primitive expected by the 1.20.1 adapter.
-            Connection.class.getDeclaredMethod("setupEncryption", SecretKey.class);
+            // encryption primitive expected by the 26.3 adapter.
+            findEncryptionMethod();
 
             MinecraftServer minecraftServer =
                     ((CraftServer) plugin.getServer()).getServer();
             sessionVerifier = new VanillaSessionVerifier(
-                    minecraftServer.getSessionService());
+                    locateSessionService(minecraftServer));
 
             enabled = true;
             ChannelInitializeListenerHolder.addListener(INITIALIZER_KEY, this::install);
@@ -96,7 +96,7 @@ public final class Paper1201SmartAuthAdapter {
                 sessionVerifier = null;
             }
             logger.log(Level.SEVERE,
-                    "SLogin desactivó Smart Auth: esta build de Paper 1.20.1 "
+                    "SLogin desactivó Smart Auth: esta build de Paper 26.3 "
                             + "no coincide con el adaptador validado.",
                     failure);
             return false;
@@ -233,11 +233,11 @@ public final class Paper1201SmartAuthAdapter {
                 return;
             }
 
-            // The optional 1.20.1 Login Start UUID is UNTRUSTED. Use it
+            // The optional 26.3 Login Start UUID is UNTRUSTED. Use it
             // solely as a hint to request the standard Mojang session proof.
             // This helps first-time official clients even if public nickname
             // lookups are throttled. Forged UUIDs can never grant access.
-            UUID clientHint = hello.profileId().orElse(null);
+            UUID clientHint = hello.profileId();
             if (plugin.getConfig().getBoolean(
                     "smart-auth.challenge-if-client-online-uuid", true)
                     && looksLikeOnlineUuid(clientHint)) {
@@ -362,7 +362,8 @@ public final class Paper1201SmartAuthAdapter {
             connection.send(new ClientboundHelloPacket(
                     serverId,
                     keyPair.getPublic().getEncoded(),
-                    challenge
+                    challenge,
+                    true
             ));
 
             resume(channel);
@@ -408,7 +409,7 @@ public final class Paper1201SmartAuthAdapter {
 
                 // Same transport transition vanilla performs before querying
                 // hasJoined.
-                connection.setupEncryption(sharedSecret);
+                enableEncryption(connection, sharedSecret);
 
                 MinecraftServer minecraftServer =
                         ((CraftServer) plugin.getServer()).getServer();
@@ -460,11 +461,11 @@ public final class Paper1201SmartAuthAdapter {
             }
 
             if (verified == null
-                    || verified.getId() == null
-                    || verified.getName() == null
+                    || verified.id() == null
+                    || verified.name() == null
                     || (attempt.expectedUuid() != null
-                        && !verified.getId().equals(attempt.expectedUuid()))
-                    || !verified.getName().equalsIgnoreCase(attempt.name())) {
+                        && !verified.id().equals(attempt.expectedUuid()))
+                    || !verified.name().equalsIgnoreCase(attempt.name())) {
                 failPremium(
                         attempt.name(),
                         new SecurityException(
@@ -474,7 +475,7 @@ public final class Paper1201SmartAuthAdapter {
             }
 
             // Keep the remainder of the login on the server thread and hand
-            // the verified profile back to the legacy 1.20.1
+            // the verified profile back to the modern 26.3
             // READY_TO_ACCEPT state. Paper's tick then performs the normal
             // whitelist/ban/full-server/duplicate-login path. The Authlib
             // GameProfile is passed through intact, including signed textures.
@@ -488,18 +489,18 @@ public final class Paper1201SmartAuthAdapter {
                     );
 
                     premiumTickets.put(
-                            verified.getId(),
+                            verified.id(),
                             new PremiumTicket(
-                                    verified.getName(),
+                                    verified.name(),
                                     System.currentTimeMillis()
                                             + VERIFIED_TICKET_TTL_MS
                             )
                     );
 
-                    debug("hasJoined confirmó " + verified.getName()
-                            + " (" + verified.getId() + ")");
+                    debug("hasJoined confirmó " + verified.name()
+                            + " (" + verified.id() + ")");
                     logger.info("SLogin verificó Premium: "
-                            + verified.getName() + " (" + verified.getId() + ")");
+                            + verified.name() + " (" + verified.id() + ")");
 
                     channel.eventLoop().execute(() -> {
                         activeChannels.remove(channel);
@@ -563,6 +564,61 @@ public final class Paper1201SmartAuthAdapter {
             return inet.getAddress();
         }
         return null;
+    }
+
+
+    private static java.lang.reflect.Method findEncryptionMethod()
+            throws NoSuchMethodException {
+        // NMS method names vary by minor version; accept only a method
+        // that takes precisely one SecretKey and returns void.
+        for (java.lang.reflect.Method method : Connection.class.getDeclaredMethods()) {
+            Class<?>[] parameters = method.getParameterTypes();
+            if (parameters.length == 1
+                    && javax.crypto.SecretKey.class.isAssignableFrom(parameters[0])
+                    && method.getReturnType() == void.class) {
+                method.setAccessible(true);
+                return method;
+            }
+        }
+        throw new NoSuchMethodException(
+                "Paper 26.3 Connection encryption method(SecretKey)");
+    }
+
+    private static void enableEncryption(Connection connection, SecretKey secret)
+            throws ReflectiveOperationException {
+        findEncryptionMethod().invoke(connection, secret);
+    }
+
+    private static Object locateSessionService(MinecraftServer server)
+            throws ReflectiveOperationException {
+        // Select the Authlib MinecraftSessionService returned by the actual
+        // running Paper server; never create an unverified replacement.
+        for (java.lang.reflect.Method method : server.getClass().getMethods()) {
+            if (method.getParameterCount() == 0
+                    && method.getReturnType().getName()
+                            .contains("MinecraftSessionService")) {
+                return method.invoke(server);
+            }
+        }
+        // Newer Minecraft versions may keep authentication services in a
+        // Services record rather than exposing a direct server getter.
+        for (java.lang.reflect.Method getter : server.getClass().getMethods()) {
+            if (getter.getParameterCount() != 0
+                    || !getter.getReturnType().getName().contains("Services")) {
+                continue;
+            }
+            Object services = getter.invoke(server);
+            if (services == null) continue;
+            for (java.lang.reflect.Method member : services.getClass().getMethods()) {
+                if (member.getParameterCount() == 0
+                        && member.getReturnType().getName()
+                                .contains("MinecraftSessionService")) {
+                    return member.invoke(services);
+                }
+            }
+        }
+        throw new NoSuchMethodException(
+                "Paper 26.3 server has no visible MinecraftSessionService");
     }
 
     static boolean looksLikeOnlineUuid(UUID supplied) {

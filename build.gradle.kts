@@ -1,10 +1,10 @@
 plugins {
     java
-    id("io.papermc.paperweight.userdev") version "1.5.11"
+    id("io.papermc.paperweight.userdev") version "2.0.0-beta.24"
 }
 
 group = "com.example"
-version = "1.9.0"
+version = "2.0.0-26.3"
 
 repositories {
     mavenCentral()
@@ -12,26 +12,28 @@ repositories {
 }
 
 dependencies {
-    paperweight.paperDevBundle("1.20.1-R0.1-SNAPSHOT")
+    paperweight.paperDevBundle("26.3.build.+")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 java {
-    toolchain.languageVersion.set(JavaLanguageVersion.of(17))
+    toolchain.languageVersion.set(JavaLanguageVersion.of(25))
 }
 
 tasks.test {
     useJUnitPlatform()
+    testLogging {
+        showStandardStreams = true
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
 }
 
 tasks.jar {
     archiveBaseName.set("SLogin")
-    archiveVersion.set("1.9.0")
+    archiveVersion.set("2.0.0-26.3")
 }
 
-tasks.assemble {
-    dependsOn(tasks.reobfJar)
-}
 
 /**
  * Test-only authlib fixture. Never part of the production reobfuscated jar.

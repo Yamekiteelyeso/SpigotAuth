@@ -58,12 +58,14 @@ public final class PremiumProtocolClient {
             ByteArrayOutputStream start = new ByteArrayOutputStream();
             writeVarInt(start, 0x00);
             writeString(start, name);
-            start.write(sendUuidHint ? 1 : 0);
-            if (sendUuidHint) {
-                DataOutputStream d = new DataOutputStream(start);
-                d.writeLong(identity.getMostSignificantBits());
-                d.writeLong(identity.getLeastSignificantBits());
-            }
+            // Protocol 777 (26.3) requires a fixed 16-byte UUID; there
+            // is no Optional<UUID> boolean used by the old 1.20.1 client.
+            UUID advertised = sendUuidHint ? identity
+                    : UUID.nameUUIDFromBytes(
+                            ("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
+            DataOutputStream d = new DataOutputStream(start);
+            d.writeLong(advertised.getMostSignificantBits());
+            d.writeLong(advertised.getLeastSignificantBits());
             sendPacket(rawOutput, start.toByteArray());
 
             byte[] request = readPacket(rawInput, false);

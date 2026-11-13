@@ -32,13 +32,13 @@ public final class SessionStubPlugin extends JavaPlugin implements Listener {
         public GameProfile hasJoinedServer(GameProfile requested,
                                            String serverHash,
                                            InetAddress remoteAddress) {
-            if (requested == null || requested.getName() == null
+            if (requested == null || requested.name() == null
                     || serverHash == null
                     || !serverHash.matches("-?[a-fA-F0-9]{1,40}")) return null;
             UUID expected = TEST_PROFILES.get(
-                    requested.getName().toLowerCase(java.util.Locale.ROOT));
+                    requested.name().toLowerCase(java.util.Locale.ROOT));
             if (expected == null) return null;
-            return new GameProfile(expected, requested.getName());
+            return new GameProfile(expected, requested.name());
         }
     }
 
