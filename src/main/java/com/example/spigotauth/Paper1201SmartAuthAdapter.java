@@ -80,7 +80,7 @@ public final class Paper1201SmartAuthAdapter {
             MinecraftServer minecraftServer =
                     ((CraftServer) plugin.getServer()).getServer();
             sessionVerifier = new VanillaSessionVerifier(
-                    locateSessionService(minecraftServer));
+                    minecraftServer.services().sessionService());
 
             enabled = true;
             ChannelInitializeListenerHolder.addListener(INITIALIZER_KEY, this::install);
