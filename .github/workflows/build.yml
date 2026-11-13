@@ -17,7 +17,7 @@ jobs:
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.8'
+          gradle-version: '9.7.1'
       - name: Build and test
         run: gradle --no-daemon clean build integrationFixtureJar
 
