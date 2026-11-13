@@ -139,7 +139,13 @@ final class VanillaSessionVerifier implements AutoCloseable {
         if (fallback != null) return fallback;
 
         throw new NoSuchMethodException(
-                "Authlib hasJoinedServer(GameProfile,String[,InetAddress])");
+                "Paper 26.3 Authlib session method unresolved on "
+                        + sessionServiceClass.getName() + ": "
+                        + java.util.Arrays.stream(sessionServiceClass.getMethods())
+                            .filter(method -> method.getName().toLowerCase(
+                                    java.util.Locale.ROOT).contains("join"))
+                            .map(java.lang.reflect.Method::toGenericString)
+                            .collect(java.util.stream.Collectors.joining("; ")));
     }
 
     @Override
