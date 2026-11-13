@@ -488,6 +488,20 @@ public final class Paper1201SmartAuthAdapter {
                             verified
                     );
 
+                    debug("Paper 26.3 login state after proof: "
+                            + loginAccess.currentState(attempt.login()));
+
+                    if (plugin.getConfig().getBoolean("smart-auth.debug", false)) {
+                        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                            try {
+                                debug("Paper login state three ticks after proof: "
+                                        + loginAccess.currentState(attempt.login()));
+                            } catch (ReflectiveOperationException exception) {
+                                debug("Could not inspect login state: " + exception);
+                            }
+                        }, 3L);
+                    }
+
                     premiumTickets.put(
                             verified.id(),
                             new PremiumTicket(
