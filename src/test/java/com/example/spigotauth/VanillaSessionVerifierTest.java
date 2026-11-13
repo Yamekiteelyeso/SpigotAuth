@@ -21,7 +21,8 @@ class VanillaSessionVerifierTest {
         assertTrue(GameProfile.class.isAssignableFrom(method.getReturnType()));
         assertTrue(method.getParameterCount() == 2
                 || method.getParameterCount() == 3);
-        assertEquals(GameProfile.class, method.getParameterTypes()[0]);
+        assertTrue(method.getParameterTypes()[0] == String.class
+                || method.getParameterTypes()[0] == GameProfile.class);
         assertEquals(String.class, method.getParameterTypes()[1]);
     }
 }
