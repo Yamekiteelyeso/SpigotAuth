@@ -48,6 +48,7 @@ public final class SessionStubPlugin extends JavaPlugin implements Listener {
             Plugin sl = getServer().getPluginManager().getPlugin("SLogin");
             if (sl == null || !sl.isEnabled())
                 throw new IllegalStateException("SLogin did not start");
+            sl.getConfig().set("smart-auth.debug", true);
 
             Object adapter = sl.getClass().getMethod("getSmartAuthAdapter").invoke(sl);
             if (adapter == null) throw new IllegalStateException("Smart Auth inactive");
