@@ -263,9 +263,11 @@ jobs:
                   raise SystemExit(
                       f"Expected 4-byte verify token, got {len(challenge)} bytes"
                   )
-              if pos != len(payload):
+              # Minecraft 26.3 adds shouldAuthenticate (boolean) after
+              # verify token: the server must require proof of ownership.
+              if pos + 1 != len(payload) or payload[pos] != 1:
                   raise SystemExit(
-                      f"Unexpected trailing bytes in Encryption Request: {len(payload) - pos}"
+                      "Invalid 26.3 Encryption Request: missing shouldAuthenticate=true"
                   )
 
               print(
