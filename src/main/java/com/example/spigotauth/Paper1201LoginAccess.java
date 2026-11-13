@@ -4,93 +4,75 @@ import com.mojang.authlib.GameProfile;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Access validated against the real Paper 1.20.1 / protocol 763 login layout.
- *
- * 1.20.1 uses the legacy state machine:
- * HELLO -> KEY -> AUTHENTICATING -> READY_TO_ACCEPT
- * -> DELAY_ACCEPT (when needed) -> ACCEPTED.
- *
- * Newer VERIFYING / WAITING_FOR_DUPE_DISCONNECT / PROTOCOL_SWITCHING states
- * are intentionally rejected by the compatibility tests for this adapter.
+ * Paper 26.3/Java 25 login layout. Fully validated at plugin startup.
+ * Uses the actual vanilla client-verification method after Mojang proof,
+ * rather than forcing the removed legacy READY_TO_ACCEPT enum state.
  */
 final class Paper1201LoginAccess {
 
-    private static final Set<String> REQUIRED_STATES = Set.of(
-            "HELLO",
-            "KEY",
-            "AUTHENTICATING",
-            "READY_TO_ACCEPT",
-            "DELAY_ACCEPT",
-            "ACCEPTED"
-    );
-
     private final Field state;
-    private final Field gameProfile;
+    private final Field requestedUsername;
+    private final Field authenticatedProfile;
     private final Field challenge;
     private final Field serverId;
+    private final Method clientVerification;
 
-    private Paper1201LoginAccess(Field state,
-                                 Field gameProfile,
-                                 Field challenge,
-                                 Field serverId) {
+    private Paper1201LoginAccess(Field state, Field requestedUsername,
+                                Field authenticatedProfile, Field challenge,
+                                Field serverId, Method clientVerification) {
         this.state = state;
-        this.gameProfile = gameProfile;
+        this.requestedUsername = requestedUsername;
+        this.authenticatedProfile = authenticatedProfile;
         this.challenge = challenge;
         this.serverId = serverId;
+        this.clientVerification = clientVerification;
     }
 
     static Paper1201LoginAccess resolve() throws ReflectiveOperationException {
         Class<?> owner = ServerLoginPacketListenerImpl.class;
+        Field state = owner.getDeclaredField("state");
+        Field username = owner.getDeclaredField("requestedUsername");
+        Field profile = owner.getDeclaredField("authenticatedProfile");
+        Field challenge = owner.getDeclaredField("challenge");
+        Field serverId = owner.getDeclaredField("serverId");
+        Method next = owner.getDeclaredMethod("startClientVerification", GameProfile.class);
 
-        Field state = null;
-        Field profile = null;
-        Field challenge = null;
-        Field serverId = null;
-
-        for (Field field : owner.getDeclaredFields()) {
-            if (Modifier.isStatic(field.getModifiers())) continue;
-
-            Class<?> type = field.getType();
-            int modifiers = field.getModifiers();
-
-            if (type.isEnum() && containsRequiredStates(type)) {
-                state = unique(state, field, "login state");
-            } else if (type == GameProfile.class) {
-                profile = unique(profile, field, "gameProfile");
-            } else if (type == byte[].class && Modifier.isFinal(modifiers)) {
-                challenge = unique(challenge, field, "challenge");
-            } else if (type == String.class && Modifier.isFinal(modifiers)) {
-                serverId = unique(serverId, field, "serverId");
-            }
+        if (!state.getType().isEnum()
+                || username.getType() != String.class
+                || profile.getType() != GameProfile.class
+                || challenge.getType() != byte[].class
+                || serverId.getType() != String.class) {
+            throw new IllegalStateException("Incompatible Paper 26.3 login field layout");
         }
 
-        if (state == null) throw new NoSuchFieldException("1.20.1 login state");
-        if (profile == null) throw new NoSuchFieldException("gameProfile");
-        if (challenge == null) throw new NoSuchFieldException("challenge");
-        if (serverId == null) throw new NoSuchFieldException("serverId");
-
-        for (Field field : new Field[]{state, profile, challenge, serverId}) {
+        for (Field field : new Field[]{state, username, profile, challenge, serverId}) {
             field.setAccessible(true);
         }
+        next.setAccessible(true);
 
-        return new Paper1201LoginAccess(state, profile, challenge, serverId);
+        Paper1201LoginAccess access =
+                new Paper1201LoginAccess(state, username, profile,
+                        challenge, serverId, next);
+
+        if (!access.supportsState("KEY") || !access.supportsState("AUTHENTICATING")) {
+            throw new IllegalStateException(
+                    "Unexpected 26.3 login states: " + access.stateNames());
+        }
+        return access;
     }
 
     byte[] challenge(ServerLoginPacketListenerImpl login)
             throws IllegalAccessException {
         byte[] value = (byte[]) challenge.get(login);
-
         if (value == null || value.length == 0) {
-            throw new IllegalStateException(
-                    "Paper devolvió un challenge de login vacío.");
+            throw new IllegalStateException("Paper 26.3: missing Premium challenge.");
         }
-
         return value.clone();
     }
 
@@ -100,20 +82,12 @@ final class Paper1201LoginAccess {
         return value == null ? "" : value;
     }
 
-    /**
-     * Reproduces the minimum part of vanilla handleHello's online branch that
-     * is skipped because the server itself is running online-mode=false.
-     */
-    void beginKeyExchange(ServerLoginPacketListenerImpl login,
-                          String username)
+    void beginKeyExchange(ServerLoginPacketListenerImpl login, String username)
             throws ReflectiveOperationException {
         if (username == null || !username.matches("[A-Za-z0-9_]{3,16}")) {
-            throw new IllegalArgumentException("Nombre de Minecraft inválido.");
+            throw new IllegalArgumentException("Invalid Minecraft Java username.");
         }
-
-        // 1.20.1 stores the candidate in gameProfile before entering KEY.
-        // UUID stays null until Authlib proves ownership.
-        gameProfile.set(login, new GameProfile(null, username));
+        requestedUsername.set(login, username);
         setState(login, "KEY");
     }
 
@@ -122,27 +96,20 @@ final class Paper1201LoginAccess {
         setState(login, "AUTHENTICATING");
     }
 
-    /**
-     * Gives Paper the full Authlib-verified profile and returns control to its
-     * normal server-thread state machine. Paper then performs the ordinary
-     * whitelist/ban/full-server/duplicate-player acceptance path.
-     */
-    void readyToAccept(ServerLoginPacketListenerImpl login,
-                       GameProfile verifiedProfile)
+    void readyToAccept(ServerLoginPacketListenerImpl login, GameProfile verifiedProfile)
             throws ReflectiveOperationException {
         if (verifiedProfile == null
-                || verifiedProfile.id() == null
-                || verifiedProfile.name() == null) {
-            throw new IllegalArgumentException(
-                    "El GameProfile Premium verificado está incompleto.");
+                || verifiedProfile.id() == null || verifiedProfile.name() == null) {
+            throw new IllegalArgumentException("Incomplete verified Premium GameProfile.");
         }
-
-        gameProfile.set(login, verifiedProfile);
-        setState(login, "READY_TO_ACCEPT");
+        authenticatedProfile.set(login, verifiedProfile);
+        // Let the 26.3 server perform the normal profile validation,
+        // async pre-login events and configuration-state transition.
+        clientVerification.invoke(login, verifiedProfile);
     }
 
-    boolean supportsState(String stateName) {
-        return stateNames().contains(stateName);
+    boolean supportsState(String name) {
+        return stateNames().contains(name);
     }
 
     Set<String> stateNames() {
@@ -151,40 +118,14 @@ final class Paper1201LoginAccess {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
-    private void setState(ServerLoginPacketListenerImpl login,
-                          String stateName)
+    private void setState(ServerLoginPacketListenerImpl login, String name)
             throws ReflectiveOperationException {
-        state.set(login, enumConstant(state.getType(), stateName));
-    }
-
-    private static boolean containsRequiredStates(Class<?> type) {
-        Set<String> names = Arrays.stream(type.getEnumConstants())
-                .map(value -> ((Enum<?>) value).name())
-                .collect(Collectors.toSet());
-
-        return names.containsAll(REQUIRED_STATES);
-    }
-
-    private static Field unique(Field current,
-                                Field candidate,
-                                String label)
-            throws NoSuchFieldException {
-        if (current != null) {
-            throw new NoSuchFieldException(
-                    "Más de un campo compatible con " + label);
-        }
-        return candidate;
-    }
-
-    private static Object enumConstant(Class<?> type, String name)
-            throws NoSuchFieldException {
-        for (Object value : type.getEnumConstants()) {
-            if (((Enum<?>) value).name().equals(name)) {
-                return value;
+        for (Object constant : state.getType().getEnumConstants()) {
+            if (((Enum<?>) constant).name().equals(name)) {
+                state.set(login, constant);
+                return;
             }
         }
-
-        throw new NoSuchFieldException(
-                "Estado NMS 1.20.1 no encontrado: " + name);
+        throw new NoSuchFieldException("Paper 26.3 login state missing: " + name);
     }
 }
