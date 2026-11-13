@@ -571,9 +571,16 @@ public final class Paper1201SmartAuthAdapter {
             Connection connection = connection();
 
             if (connection != null) {
-                connection.disconnect(
-                        Component.literal(plugin.getMessages().raw(messagePath))
-                );
+                Component reason = Component.literal(plugin.getMessages().raw(messagePath));
+                // Connection.disconnect() only closes the transport. The
+                // login listener must send ClientboundLoginDisconnectPacket
+                // first so the client actually sees the ownership reason.
+                if (connection.getPacketListener()
+                        instanceof ServerLoginPacketListenerImpl login) {
+                    login.disconnect(reason);
+                } else {
+                    connection.disconnect(reason);
+                }
             } else {
                 channel.close();
             }
