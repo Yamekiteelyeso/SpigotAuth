@@ -66,7 +66,7 @@ jobs:
           EOF
 
           REPO_ROOT="$PWD"
-          PLUGIN_JAR="$PWD/build/libs/SLogin-1.9.3.jar"
+          PLUGIN_JAR="$PWD/build/libs/SLogin-1.9.4.jar"
           CI_FIXTURE_JAR="$PWD/build/libs/SLogin-CI-Fixture.jar"
 
           test -f "$PLUGIN_JAR" || { echo "Missing production reobfuscated JAR"; exit 1; }
@@ -85,6 +85,16 @@ jobs:
           # depend on the public profile lookup service. Ownership is NOT faked:
           # we only test that SLogin enters the encryption-challenge path.
           mkdir -p "$SERVER_DIR/plugins/SLogin"
+          # Simulate a legacy 1.9.3 configuration with a custom translated
+          # message. SLogin must migrate it into messages.yml without loss.
+          cat > "$SERVER_DIR/plugins/SLogin/config.yml" <<'EOF_CONFIG'
+          language: es
+          messages:
+            es:
+              auth:
+                registered: "&aCI_CUSTOM_LEGACY_MESSAGE"
+          EOF_CONFIG
+
           cat > "$SERVER_DIR/plugins/SLogin/premium-preferences.yml" <<'EOF'
           names:
             notch:
@@ -115,6 +125,9 @@ jobs:
             migtocancel:
               verified: false
               pending: true
+            manualpending:
+              verified: false
+              pending: true
           EOF
 
           cd "$SERVER_DIR"
@@ -143,6 +156,15 @@ jobs:
             echo "Paper did not reach the ready state."
             exit 1
           fi
+
+          # The old config.yml messages must be migrated automatically.
+          test -f "$SERVER_DIR/plugins/SLogin/messages.yml"
+          grep -q 'CI_CUSTOM_LEGACY_MESSAGE' "$SERVER_DIR/plugins/SLogin/messages.yml"
+          if grep -q '^messages:' "$SERVER_DIR/plugins/SLogin/config.yml"; then
+            echo "SLogin failed to separate legacy messages from config.yml."
+            exit 1
+          fi
+          ls "$SERVER_DIR/plugins/SLogin"/config.yml.backup-messages-*
 
           # Protocol 763 (Minecraft 1.20.1): Handshake -> Login Start.
           # The seeded Premium identity must receive Login Encryption Request
@@ -425,6 +447,7 @@ jobs:
           python3 - <<'PY_RCON'
           import socket
           import struct
+          from pathlib import Path
 
           def read_exact(sock, n):
               data = bytearray()
@@ -465,7 +488,7 @@ jobs:
                   (107, "slogin premiumcancel MigToCancel", "cancelada"),
                   (108, "slogin premiumcancel MigToCancel", "no tiene"),
                   (109, "slogin premiumcheck bad!", "premiumcheck"),
-                  (110, "slogin resetmessages", "estilo de mensajes"),
+                  (110, "slogin resetmessages", "mensajes restaurados"),
               ]:
                   send_rcon(sock, request_id, 2, command)
                   got_id, _, result = recv_rcon(sock)
@@ -475,7 +498,105 @@ jobs:
                           f"(id={got_id}, response={result!r})"
                       )
                   print(f"SLogin RCON command test OK: /{command}")
+
+              # Switch to manual-first onboarding in the running Paper server.
+              settings_path = Path("plugins/SLogin/config.yml")
+              settings_text = settings_path.read_text(encoding="utf-8")
+              expected = "require-register-before-premium: false"
+              if expected not in settings_text:
+                  raise SystemExit("Missing default manual Premium setting.")
+              settings_path.write_text(
+                  settings_text.replace(expected,
+                                        "require-register-before-premium: true", 1),
+                  encoding="utf-8"
+              )
+              send_rcon(sock, 111, 2, "slogin reload")
+              got_id, _, result = recv_rcon(sock)
+              if got_id != 111 or "recargada" not in result.lower():
+                  raise SystemExit(f"SLogin reload failed after enabling manual mode: {result!r}")
+              print("SLogin switched to register-before-premium mode.")
           PY_RCON
+
+          # Protocol behavior in manual-first mode must be local for unbound
+          # names, yet remain a Mojang encryption challenge for verified names
+          # and pending /premium migrations.
+          python3 - <<'PY_MANUAL'
+          import socket
+          import struct
+          import uuid
+
+          HOST = "127.0.0.1"
+          PORT = 25579
+
+          def varint(value):
+              encoded = bytearray()
+              while True:
+                  byte = value & 0x7f
+                  value >>= 7
+                  encoded.append(byte | 0x80 if value else byte)
+                  if not value:
+                      return bytes(encoded)
+
+          def mc_string(s):
+              b = s.encode("utf-8")
+              return varint(len(b)) + b
+
+          def recv_varint(sock):
+              result = 0
+              for shift in range(0, 35, 7):
+                  chunk = sock.recv(1)
+                  if not chunk:
+                      raise RuntimeError("Connection closed before Login response")
+                  byte = chunk[0]
+                  result |= (byte & 0x7f) << shift
+                  if not byte & 0x80:
+                      return result
+              raise RuntimeError("VarInt too large")
+
+          def first_response(name, hint=None):
+              with socket.create_connection((HOST, PORT), timeout=10) as sock:
+                  sock.settimeout(10)
+                  handshake = (
+                      varint(0) + varint(763) + mc_string(HOST)
+                      + struct.pack(">H", PORT) + varint(2)
+                  )
+                  sock.sendall(varint(len(handshake)) + handshake)
+                  hello = varint(0) + mc_string(name)
+                  if hint is None:
+                      hello += bytes([0])
+                  else:
+                      hello += bytes([1]) + hint.bytes
+                  sock.sendall(varint(len(hello)) + hello)
+                  size = recv_varint(sock)
+                  data = bytearray()
+                  while len(data) < size:
+                      chunk = sock.recv(size - len(data))
+                      if not chunk:
+                          raise RuntimeError("Truncated Login response")
+                      data += chunk
+                  return data[0], bytes(data)
+
+          no_hint_id, no_hint_packet = first_response("CI_ManualNoUUID")
+          print(f"Manual local no-hint first packet: {no_hint_id:#x}, {no_hint_packet!r}")
+          first, packet = first_response(
+              "CI_ManualNew",
+              uuid.UUID("33333333-3333-4333-8333-333333333333")
+          )
+          print(f"Manual local online-hint first packet: {first:#x}, {packet!r}")
+          if no_hint_id not in (0x02, 0x03) or first not in (0x02, 0x03):
+              raise SystemExit(
+                  f"Manual mode new account expected offline login, noHint={no_hint_id:#x}, onlineHint={first:#x}"
+              )
+          for name in ("Notch", "ManualPending"):
+              first, _ = first_response(name)
+              if first != 0x01:
+                  raise SystemExit(
+                      f"Manual mode must protect {name} with a challenge, "
+                      f"got {first:#x}"
+                  )
+          print("SLogin manual-first mode: unbound username takes offline "
+                "registration flow; verified/pending names still require challenge.")
+          PY_MANUAL
 
           if ! grep -q "El verify token del Encryption Response no coincide" server.log; then
             cat server.log
@@ -484,7 +605,7 @@ jobs:
           fi
           echo "SLogin security smoke test: tampered Premium encryption response rejected."
 
-          grep -q "SLogin v1.9.3" server.log
+          grep -q "SLogin v1.9.4" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
 
           # Command-map smoke test: every public/admin command must have
@@ -525,6 +646,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SLogin-1.9.3
-          path: build/libs/SLogin-1.9.3.jar
+          name: SLogin-1.9.4
+          path: build/libs/SLogin-1.9.4.jar
           if-no-files-found: error

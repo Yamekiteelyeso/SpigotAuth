@@ -74,9 +74,13 @@ public final class SpigotAuth extends JavaPlugin {
             return;
         }
 
-        getLogger().info("SLogin v1.9.3 — Synex Login activado. Idioma: " + messages.language());
+        getLogger().info("SLogin v1.9.4 — Synex Login activado. Idioma: " + messages.language());
         if (!getServer().getOnlineMode() && smartAuthAdapter != null) {
-            getLogger().info("Premium Smart Auth activo: las cuentas verificadas entran sin /register ni /login.");
+            getLogger().info("Premium Smart Auth activo: "
+                    + (getConfig().getBoolean(
+                            "smart-auth.require-register-before-premium", false)
+                            ? "nuevos jugadores registran cuenta local antes de /premium."
+                            : "las cuentas verificadas entran sin /register ni /login."));
         }
     }
 
@@ -95,47 +99,14 @@ public final class SpigotAuth extends JavaPlugin {
         return true;
     }
 
-    /**
-     * Explicit opt-in to restoring bundled ES/EN messages. Always create a
-     * backup of the existing config first; preserve every non-message setting.
-     * Upgrading the plugin will never silently overwrite custom messages.
-     */
+    /** Restores only messages.yml and keeps a backup of the previous texts. */
     public boolean restoreDefaultMessages() {
-        File configFile = new File(getDataFolder(), "config.yml");
-        try (InputStream resource = getResource("config.yml")) {
-            if (resource == null) return false;
-            YamlConfiguration bundled = YamlConfiguration.loadConfiguration(
-                    new InputStreamReader(resource, StandardCharsets.UTF_8));
-            ConfigurationSection defaults = bundled.getConfigurationSection("messages");
-            if (defaults == null) return false;
-
-            if (configFile.isFile()) {
-                File backup = new File(getDataFolder(),
-                        "config.yml.backup-" + System.currentTimeMillis());
-                Files.copy(configFile.toPath(), backup.toPath());
-                getLogger().info("Mensajes anteriores respaldados en " + backup.getName());
-            }
-
-            getConfig().set("messages", null);
-            for (String key : defaults.getKeys(true)) {
-                if (!defaults.isConfigurationSection(key)) {
-                    getConfig().set("messages." + key, defaults.get(key));
-                }
-            }
-            saveConfig();
-            reloadConfig();
-            return true;
-        } catch (Exception exception) {
-            getLogger().log(Level.WARNING,
-                    "No se pudo restaurar los mensajes predefinidos de SLogin.",
-                    exception);
-            reloadConfig();
-            return false;
-        }
+        return messages != null && messages.restoreDefaults();
     }
 
     public void reloadSLoginConfiguration() {
         reloadConfig();
+        if (messages != null) messages.reload();
         if (loginLocations != null) loginLocations.reload();
 
         if (premium != null) {
