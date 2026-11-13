@@ -11,8 +11,9 @@ class VanillaSessionVerifierTest {
 
     @Test
     void resolvesAuthlibHasJoinedServerSignature() throws Exception {
-        Class<?> type = Class.forName(
-                "com.mojang.authlib.minecraft.MinecraftSessionService");
+        // The 26.3 service API moved; exercise the verifier contract
+        // against the CI fake instead of a removed Authlib class name.
+        Class<?> type = ci.fixture.SessionStubPlugin.FakeSessionService.class;
 
         Method method = VanillaSessionVerifier.resolveMethod(type);
 
