@@ -5,6 +5,13 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
 
 import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.logging.Level;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 
 public final class SpigotAuth extends JavaPlugin {
 
@@ -84,6 +91,45 @@ public final class SpigotAuth extends JavaPlugin {
         getLogger().info("Comando registrado: /" + name
                 + " (alias: " + command.getAliases() + ")");
         return true;
+    }
+
+    /**
+     * Explicit opt-in to restoring bundled ES/EN messages. Always create a
+     * backup of the existing config first; preserve every non-message setting.
+     * Upgrading the plugin will never silently overwrite custom messages.
+     */
+    public boolean restoreDefaultMessages() {
+        File configFile = new File(getDataFolder(), "config.yml");
+        try (InputStream resource = getResource("config.yml")) {
+            if (resource == null) return false;
+            YamlConfiguration bundled = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(resource, StandardCharsets.UTF_8));
+            ConfigurationSection defaults = bundled.getConfigurationSection("messages");
+            if (defaults == null) return false;
+
+            if (configFile.isFile()) {
+                File backup = new File(getDataFolder(),
+                        "config.yml.backup-" + System.currentTimeMillis());
+                Files.copy(configFile.toPath(), backup.toPath());
+                getLogger().info("Mensajes anteriores respaldados en " + backup.getName());
+            }
+
+            getConfig().set("messages", null);
+            for (String key : defaults.getKeys(true)) {
+                if (!defaults.isConfigurationSection(key)) {
+                    getConfig().set("messages." + key, defaults.get(key));
+                }
+            }
+            saveConfig();
+            reloadConfig();
+            return true;
+        } catch (Exception exception) {
+            getLogger().log(Level.WARNING,
+                    "No se pudo restaurar los mensajes predefinidos de SLogin.",
+                    exception);
+            reloadConfig();
+            return false;
+        }
     }
 
     public void reloadSLoginConfiguration() {
