@@ -131,8 +131,8 @@ final class Paper1201LoginAccess {
                        GameProfile verifiedProfile)
             throws ReflectiveOperationException {
         if (verifiedProfile == null
-                || verifiedProfile.getId() == null
-                || verifiedProfile.getName() == null) {
+                || verifiedProfile.id() == null
+                || verifiedProfile.name() == null) {
             throw new IllegalArgumentException(
                     "El GameProfile Premium verificado está incompleto.");
         }
