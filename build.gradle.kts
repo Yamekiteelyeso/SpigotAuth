@@ -14,6 +14,7 @@ repositories {
 dependencies {
     paperweight.paperDevBundle("26.3.build.+")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 java {
