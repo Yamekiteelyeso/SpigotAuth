@@ -18,6 +18,13 @@ class Paper1201LoginAccessTest {
 
     @Test
     void resolvesExpectedPaper1201LoginLayout() throws Exception {
+        System.err.println("PAPER_26_3_LOGIN_FIELDS:\n" + dumpFields());
+        System.err.println("PAPER_26_3_LOGIN_PROFILE_METHODS:\n" + dumpMethods());
+        System.err.println("PAPER_26_3_CONNECTION_SECRET_METHODS:\n"
+                + Arrays.stream(Connection.class.getDeclaredMethods())
+                    .filter(m -> Arrays.asList(m.getParameterTypes()).contains(SecretKey.class))
+                    .map(Method::toString)
+                    .collect(Collectors.joining("\n")));
         Paper1201LoginAccess access;
 
         try {
