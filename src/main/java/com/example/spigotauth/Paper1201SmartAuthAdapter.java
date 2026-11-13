@@ -13,7 +13,7 @@ import net.minecraft.network.protocol.login.ServerboundHelloPacket;
 import net.minecraft.network.protocol.login.ServerboundKeyPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
-import org.bukkit.craftbukkit.v1_20_R1.CraftServer;
+import org.bukkit.craftbukkit.CraftServer;
 
 import javax.crypto.SecretKey;
 import java.net.InetAddress;
@@ -29,7 +29,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Selective Mojang authentication for Paper 1.20.1 servers running
+ * Selective Mojang authentication for Paper 26.3 servers running
  * online-mode=false.
  *
  * SLogin intercepts Login Start only for Premium candidates. Cracked players
@@ -57,12 +57,12 @@ public final class Paper1201SmartAuthAdapter {
     }
 
     public boolean enable() {
-        if (!"1.20.1".equals(plugin.getServer().getMinecraftVersion())) {
-            logger.severe("SLogin Smart Auth requiere exactamente Paper 1.20.1.");
+        if (!"26.3".equals(plugin.getServer().getMinecraftVersion())) {
+            logger.severe("SLogin Smart Auth requiere exactamente Paper 26.3.");
             return false;
         }
         if (!(plugin.getServer() instanceof CraftServer)) {
-            logger.severe("SLogin Smart Auth requiere Paper/CraftBukkit 1.20.1.");
+            logger.severe("SLogin Smart Auth requiere Paper/CraftBukkit 26.3.");
             return false;
         }
         if (plugin.getServer().getOnlineMode()) {
@@ -74,7 +74,7 @@ public final class Paper1201SmartAuthAdapter {
             loginAccess = Paper1201LoginAccess.resolve();
 
             // Fail at startup if this Paper build does not expose the exact
-            // encryption primitive expected by the 1.20.1 adapter.
+            // encryption primitive expected by the 26.3 adapter.
             Connection.class.getDeclaredMethod("setupEncryption", SecretKey.class);
 
             MinecraftServer minecraftServer =
@@ -96,7 +96,7 @@ public final class Paper1201SmartAuthAdapter {
                 sessionVerifier = null;
             }
             logger.log(Level.SEVERE,
-                    "SLogin desactivó Smart Auth: esta build de Paper 1.20.1 "
+                    "SLogin desactivó Smart Auth: esta build de Paper 26.3 "
                             + "no coincide con el adaptador validado.",
                     failure);
             return false;
@@ -233,7 +233,7 @@ public final class Paper1201SmartAuthAdapter {
                 return;
             }
 
-            // The optional 1.20.1 Login Start UUID is UNTRUSTED. Use it
+            // The optional 26.3 Login Start UUID is UNTRUSTED. Use it
             // solely as a hint to request the standard Mojang session proof.
             // This helps first-time official clients even if public nickname
             // lookups are throttled. Forged UUIDs can never grant access.
@@ -474,7 +474,7 @@ public final class Paper1201SmartAuthAdapter {
             }
 
             // Keep the remainder of the login on the server thread and hand
-            // the verified profile back to the legacy 1.20.1
+            // the verified profile back to the modern 26.3
             // READY_TO_ACCEPT state. Paper's tick then performs the normal
             // whitelist/ban/full-server/duplicate-login path. The Authlib
             // GameProfile is passed through intact, including signed textures.
