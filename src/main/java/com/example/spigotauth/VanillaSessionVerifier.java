@@ -63,7 +63,10 @@ final class VanillaSessionVerifier implements AutoCloseable {
                             "Hash de sesión no válido."));
         }
 
-        GameProfile requested = new GameProfile(null, requestedName);
+        // Authlib 10 / Minecraft 26.3 accepts a username string. Legacy
+        // services may still accept a GameProfile.
+        Object requested = hasJoinedServer.getParameterTypes()[0] == String.class
+                ? requestedName : new GameProfile(null, requestedName);
 
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -118,14 +121,16 @@ final class VanillaSessionVerifier implements AutoCloseable {
             Class<?>[] parameters = method.getParameterTypes();
 
             if (parameters.length == 3
-                    && parameters[0] == GameProfile.class
+                    && (parameters[0] == GameProfile.class
+                        || parameters[0] == String.class)
                     && parameters[1] == String.class
                     && parameters[2] == InetAddress.class) {
                 return method;
             }
 
             if (parameters.length == 2
-                    && parameters[0] == GameProfile.class
+                    && (parameters[0] == GameProfile.class
+                        || parameters[0] == String.class)
                     && parameters[1] == String.class) {
                 fallback = method;
             }
