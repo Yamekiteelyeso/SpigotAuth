@@ -29,16 +29,16 @@ public final class SessionStubPlugin extends JavaPlugin implements Listener {
     );
 
     public static final class FakeSessionService {
-        public GameProfile hasJoinedServer(GameProfile requested,
+        public GameProfile hasJoinedServer(String requested,
                                            String serverHash,
                                            InetAddress remoteAddress) {
-            if (requested == null || requested.name() == null
+            if (requested == null || requested == null
                     || serverHash == null
                     || !serverHash.matches("-?[a-fA-F0-9]{1,40}")) return null;
             UUID expected = TEST_PROFILES.get(
-                    requested.name().toLowerCase(java.util.Locale.ROOT));
+                    requested.toLowerCase(java.util.Locale.ROOT));
             if (expected == null) return null;
-            return new GameProfile(expected, requested.name());
+            return new GameProfile(expected, requested);
         }
     }
 
