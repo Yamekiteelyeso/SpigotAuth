@@ -108,6 +108,12 @@ final class Paper1201LoginAccess {
         clientVerification.invoke(login, verifiedProfile);
     }
 
+    String currentState(ServerLoginPacketListenerImpl login)
+            throws IllegalAccessException {
+        Object value = state.get(login);
+        return value instanceof Enum<?> enumValue ? enumValue.name() : String.valueOf(value);
+    }
+
     boolean supportsState(String name) {
         return stateNames().contains(name);
     }
