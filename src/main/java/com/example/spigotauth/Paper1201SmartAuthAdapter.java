@@ -19,6 +19,7 @@ import javax.crypto.SecretKey;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.util.Map;
 import java.util.UUID;
@@ -242,7 +243,24 @@ public final class Paper1201SmartAuthAdapter {
                 expected = plugin.getPremiumPreferences().expectedUuid(name);
             }
 
+            // A verified binding without a parseable UUID is an error, not
+            // an invitation to downgrade to password/offline login.
+            if (expected == null && plugin.getPremiumPreferences().isVerified(name)) {
+                logger.warning("Protección Premium sin UUID válido para " + name);
+                disconnect("premium.protected-login");
+                return;
+            }
+
             if (expected != null || plugin.getPremiumPreferences().isPending(name)) {
+                // A vanilla offline UUID proves this is NOT the matching
+                // official identity. An arbitrary/forged UUID still requires
+                // the entire Mojang session challenge to be accepted.
+                UUID advertised = hello.profileId().orElse(null);
+                if (expected != null && isOfflineUuidClaim(name, advertised, expected)) {
+                    debug("Acceso offline rechazado para nombre Premium " + name);
+                    disconnect("premium.not-owner");
+                    return;
+                }
                 debug("Verificación Premium obligatoria para " + name
                         + (expected == null ? " (migración pendiente)" : " -> " + expected));
                 startChallengeOrFail(hello, expected);
@@ -542,7 +560,8 @@ public final class Paper1201SmartAuthAdapter {
             if (isNetworkOrTimeoutFailure(root)) {
                 disconnect("premium.verification-unavailable");
             } else if (root instanceof SecurityException) {
-                disconnect("premium.verification-invalid");
+                disconnect(isProtectedPremiumName(name)
+                        ? "premium.not-owner" : "premium.verification-invalid");
             } else {
                 disconnect("premium.verification-start-error");
             }
@@ -579,6 +598,23 @@ public final class Paper1201SmartAuthAdapter {
             return inet.getAddress();
         }
         return null;
+    }
+
+    /**
+     * UUIDs sent by clients are untrusted. This check only identifies the
+     * standard offline-mode UUID and denies an already protected name.
+     * All other clients must still prove ownership through Mojang.
+     */
+    static boolean isOfflineUuidClaim(String name, UUID clientUuid, UUID officialUuid) {
+        if (name == null || clientUuid == null || officialUuid == null) return false;
+        UUID offline = UUID.nameUUIDFromBytes(
+                ("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
+        return offline.equals(clientUuid) && !officialUuid.equals(clientUuid);
+    }
+
+    private boolean isProtectedPremiumName(String name) {
+        return plugin.getPremiumAccounts().isProtectedName(name)
+                || plugin.getPremiumPreferences().isVerified(name);
     }
 
     static boolean looksLikeOnlineUuid(UUID supplied) {

@@ -85,6 +85,8 @@ messages:
       save-error: "&cNo se pudo guardar tu identidad Premium. Inténtalo de nuevo."
       verification-unavailable: "&cMojang no respondió. Comprueba tu conexión e inténtalo de nuevo. Tu migración pendiente se conserva."
       verification-invalid: "&cTu sesión Premium no se pudo confirmar. Inicia sesión otra vez en el launcher oficial y reconecta."
+      not-owner: "&b&lSLOGIN &8» &cNo eres el dueño de esta cuenta.\n&7Este nombre está protegido como &bPremium&7."
+      protected-login: "&b&lSLOGIN &8» &cCuenta Premium protegida.\n&7Entra usando su sesión oficial de Minecraft."
       verification-start-error: "&cNo se pudo iniciar la verificación Premium."
       incompatible-login-state: "&cTu conexión llegó en un estado de login no compatible."
       question:
@@ -127,11 +129,7 @@ messages:
       command-blocked: "{prefix}&ePrimero autentícate. &7Usa &b/login &7o &b/register&7."
     register:
       prompt:
-        - ""
-        - "&8▎ &b&lSLOGIN &8• &fCREAR CUENTA"
-        - "&7Bienvenido, &b{player}&7. Crea tu contraseña."
-        - "&b/register &f<clave> <confirmar> &8· &7Alias: &f/r"
-        - "&8Tienes &f{seconds}s &8para completar el registro."
+        - "&b&lSLOGIN &8» &7Usa &b/register <contraseña> <contraseña>&7."
       already-registered: "{prefix}&eYa tienes una cuenta. &7Inicia sesión con &b/login <contraseña>&7."
       usage: "{prefix}&eUso: &f/register <contraseña> <confirmar>"
       length: "{prefix}&cLa contraseña debe tener entre &f{min}&c y &f{max}&c caracteres."
@@ -139,13 +137,9 @@ messages:
       save-error: "{prefix}&cNo fue posible guardar tu registro. &7Contacta al equipo del servidor."
     login:
       prompt:
-        - ""
-        - "&8▎ &b&lSLOGIN &8• &fINICIAR SESIÓN"
-        - "&7Hola, &b{player}&7. Verifica tu cuenta para continuar."
-        - "&b/login &f<contraseña> &8· &7Alias: &f/l"
-        - "&8Tienes &f{seconds}s &8para iniciar sesión."
+        - "&b&lSLOGIN &8» &7Usa &b/login <contraseña>&7."
       not-registered: "{prefix}&eTodavía no tienes cuenta. &7Usa &b/register <contraseña> <confirmar>&7."
-      usage: "{prefix}&eUso: &f/login <contraseña> &7o &f/l <contraseña>"
+      usage: "{prefix}&eUso: &b/login <contraseña>"
     changepass:
       usage: "{prefix}&eUso: &f/changepass <contraseña-vieja> <contraseña-nueva>"
       not-local: "{prefix}&eLas cuentas Premium verificadas no usan contraseña local."
@@ -202,6 +196,8 @@ messages:
       save-error: "&cYour Premium identity could not be saved. Try again."
       verification-unavailable: "&cMojang did not respond. Check your connection and try again. Pending migration is preserved."
       verification-invalid: "&cYour Premium session could not be confirmed. Sign in again using the official launcher and reconnect."
+      not-owner: "&b&lSLOGIN &8» &cYou are not the owner of this account.\n&7This name is protected as &bPremium&7."
+      protected-login: "&b&lSLOGIN &8» &cProtected Premium account.\n&7Sign in using its official Minecraft session."
       verification-start-error: "&cPremium verification could not be started."
       incompatible-login-state: "&cYour connection reached an unsupported login state."
       question:
@@ -244,11 +240,7 @@ messages:
       command-blocked: "{prefix}&eAuthenticate first. &7Use &b/login &7or &b/register&7."
     register:
       prompt:
-        - ""
-        - "&8▎ &b&lSLOGIN &8• &fCREATE ACCOUNT"
-        - "&7Welcome, &b{player}&7. Create your password."
-        - "&b/register &f<password> <confirm> &8· &7Alias: &f/r"
-        - "&8You have &f{seconds}s &8to complete registration."
+        - "&b&lSLOGIN &8» &7Use &b/register <password> <password>&7."
       already-registered: "{prefix}&eYou already have an account. &7Use &b/login <password>&7."
       usage: "{prefix}&eUsage: &f/register <password> <confirm>"
       length: "{prefix}&cPassword length must be between &f{min}&c and &f{max}&c characters."
@@ -256,13 +248,9 @@ messages:
       save-error: "{prefix}&cYour registration could not be saved. &7Contact server staff."
     login:
       prompt:
-        - ""
-        - "&8▎ &b&lSLOGIN &8• &fSIGN IN"
-        - "&7Hi, &b{player}&7. Verify your account to continue."
-        - "&b/login &f<password> &8· &7Alias: &f/l"
-        - "&8You have &f{seconds}s &8to sign in."
+        - "&b&lSLOGIN &8» &7Use &b/login <password>&7."
       not-registered: "{prefix}&eYou don't have an account yet. &7Use &b/register <password> <confirm>&7."
-      usage: "{prefix}&eUsage: &f/login <password> &7or &f/l <password>"
+      usage: "{prefix}&eUsage: &b/login <password>"
     changepass:
       usage: "{prefix}&eUsage: &f/changepass <old-password> <new-password>"
       not-local: "{prefix}&eVerified Premium accounts do not use a local password."

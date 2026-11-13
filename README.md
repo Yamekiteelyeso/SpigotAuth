@@ -1,10 +1,10 @@
-# SLogin 1.9.2 — Synex Login
+# SLogin 1.9.3 — Synex Login
 
 Standalone authentication plugin for Minecraft Java, **Paper 1.20.1 / Java 17**, with no plugin dependencies. Supports offline/cracked players and verified Premium Minecraft Java players on an online-mode=false server.
 
 ## Installation
 
-1. Use the CI-built SLogin-1.9.2.jar production build, not the dev JAR.
+1. Use the CI-built SLogin-1.9.3.jar production build, not the dev JAR.
 2. Remove other conflicting login plugins. Install on Paper 1.20.1 and Java 17.
 3. Restart, edit plugins/SLogin/config.yml and run /slogin status.
 4. With online-mode=false and smart-auth.enabled=true, run `/slogin status`. Only Paper 1.20.1 can show ACTIVE; if inactive, the diagnostic line explains why.
@@ -110,10 +110,10 @@ config.yml before replacing only the messages section.
 CI uses a **separate non-production** fixture plugin to emulate a successful
 sessionserver response and tests actual RSA, AES and Login Success for
 both pending /premium and a first-time Premium username. The fixture is not
-shipped in SLogin-1.9.2.jar. CI cannot replace the final verification with a
+shipped in SLogin-1.9.3.jar. CI cannot replace the final verification with a
 real Microsoft/Mojang account session.
 
-## 1.9.2: reconnect safety and pre-login isolation
+## 1.9.3: reconnect safety and pre-login isolation
 
 Unauthenticated players are confined horizontally while gravity and vertical
 movement remain free so an airborne reconnect doesn't get stuck and kicked for
@@ -125,3 +125,18 @@ just its UUID, preventing a new connection from inheriting a previous login.
 Test in-game: register/login, jump and disconnect while airborne, reconnect,
 fall to the ground, and log in normally. The production Premium verification
 path was not modified; also retest /premium on your Paper 1.20.1 server.
+
+## 1.9.3 Premium impersonation protection and compact prompts
+
+Already-verified Premium names are protected even on offline-mode servers.
+When a connecting client advertises the standard offline UUID for a protected
+Premium name, SLogin sends a clear "not the owner" kick before authentication.
+A forged online UUID is NOT trusted: the official Mojang encrypted challenge
+and hasJoined verification remain mandatory. A corrupt verified binding stays
+fail-closed instead of permitting local password login.
+
+Registration and login prompts now display a single short command line. The
+existing aliases (/r, /reg, /l and /log) remain functional but hidden from
+prompts. Update existing messages with /slogin resetmessages (creates backup).
+CI exercises offline-UUID denial and the existing mocked Premium handshake,
+but live official-account behavior should be tested in Minecraft.

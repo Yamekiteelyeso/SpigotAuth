@@ -66,7 +66,7 @@ jobs:
           EOF
 
           REPO_ROOT="$PWD"
-          PLUGIN_JAR="$PWD/build/libs/SLogin-1.9.2.jar"
+          PLUGIN_JAR="$PWD/build/libs/SLogin-1.9.3.jar"
           CI_FIXTURE_JAR="$PWD/build/libs/SLogin-CI-Fixture.jar"
 
           test -f "$PLUGIN_JAR" || { echo "Missing production reobfuscated JAR"; exit 1; }
@@ -151,6 +151,8 @@ jobs:
           import socket
           import struct
           import secrets
+          import hashlib
+          import uuid
           import subprocess
           import tempfile
           from pathlib import Path
@@ -314,6 +316,34 @@ jobs:
                   pass
               print("SLogin protocol smoke test: forged RSA verify token was rejected.")
 
+          # A client explicitly sending the offline UUID for an already
+          # verified Premium name is rejected with a clear ownership kick.
+          with socket.create_connection((HOST, PORT), timeout=10) as sock:
+              sock.settimeout(10)
+              send_packet(sock, (
+                  varint(0x00) + varint(PROTOCOL) + mc_string(HOST)
+                  + struct.pack(">H", PORT) + varint(2)
+              ))
+              digest = bytearray(hashlib.md5(b"OfflinePlayer:Notch").digest())
+              digest[6] = (digest[6] & 0x0F) | 0x30
+              digest[8] = (digest[8] & 0x3F) | 0x80
+              offline_uuid = uuid.UUID(bytes=bytes(digest))
+              send_packet(sock, varint(0x00) + mc_string("Notch")
+                          + b"\x01" + offline_uuid.bytes)
+              size = read_varint(sock)
+              payload = recv_exact(sock, size)
+              packet_id, pos = decode_varint(payload)
+              if packet_id != 0x00:
+                  raise SystemExit(
+                      "SECURITY REGRESSION: offline Premium impersonator not kicked; "
+                      f"received 0x{packet_id:02x}"
+                  )
+              reason_len, pos = decode_varint(payload, pos)
+              reason = payload[pos:pos + reason_len].decode("utf-8")
+              if "No eres el dueño de esta cuenta" not in reason:
+                  raise SystemExit(f"Unexpected Premium kick message: {reason!r}")
+              print("SLogin: offline Premium impersonation denied with ownership message.")
+
           # Pending /premium with no public UUID lookup must send the exact
           # same official Encryption Request and never bypass session proof.
           with socket.create_connection((HOST, PORT), timeout=10) as sock:
@@ -454,7 +484,7 @@ jobs:
           fi
           echo "SLogin security smoke test: tampered Premium encryption response rejected."
 
-          grep -q "SLogin v1.9.2" server.log
+          grep -q "SLogin v1.9.3" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
 
           # Command-map smoke test: every public/admin command must have
@@ -495,6 +525,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SLogin-1.9.2
-          path: build/libs/SLogin-1.9.2.jar
+          name: SLogin-1.9.3
+          path: build/libs/SLogin-1.9.3.jar
           if-no-files-found: error
