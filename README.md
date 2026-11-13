@@ -1,13 +1,13 @@
-# SLogin 1.9 — Synex Login
+# SLogin 1.9.1 — Synex Login
 
 Standalone authentication plugin for Minecraft Java, **Paper 1.20.1 / Java 17**, with no plugin dependencies. Supports offline/cracked players and verified Premium Minecraft Java players on an online-mode=false server.
 
 ## Installation
 
-1. Use the CI-built SLogin-1.9.0.jar production build, not the dev JAR.
+1. Use the CI-built SLogin-1.9.1.jar production build, not the dev JAR.
 2. Remove other conflicting login plugins. Install on Paper 1.20.1 and Java 17.
 3. Restart, edit plugins/SLogin/config.yml and run /slogin status.
-4. With online-mode=false and smart-auth.enabled=true, Smart Auth should say ACTIVE.
+4. With online-mode=false and smart-auth.enabled=true, run `/slogin status`. Only Paper 1.20.1 can show ACTIVE; if inactive, the diagnostic line explains why.
 
 IMPORTANT: A public nickname lookup is not proof of identity. Premium autologin happens only after the encrypted handshake and official Mojang session verification. A real Microsoft/Minecraft authenticated client is needed for a complete end-to-end acceptance test.
 
@@ -18,7 +18,9 @@ IMPORTANT: A public nickname lookup is not proof of identity. Premium autologin 
 | /register password confirm (aliases /r, /reg) | Create an offline account |
 | /login password (aliases /l, /log) | Log in to a local account |
 | /changepass old new | Change password |
-| /premium | Request Premium migration as an already registered, authenticated local player |
+| /premium | Request Premium migration for a signed-in local account (confirm on reconnect) |
+| /premium status | Show whether the account is pending, verified, or blocked by configuration |
+| /premium cancel | Cancel your own pending migration while authenticated locally |
 | /slogin help | All admin commands |
 | /slogin status | Premium handshake and location diagnostics |
 | /slogin reload | Reload config and saved destinations |
@@ -69,7 +71,7 @@ After a local /login or /register or successful verified Premium join, players a
 - Previously verified names challenge their known UUID directly without a public name lookup.
 - Existing local password data is preserved on Premium-name collisions; one username does not prove both identities have the same owner.
 - Offline users with Premium usernames may be blocked by Premium-first challenge. To allow previously registered local usernames to use local login first, set smart-auth.auto-login-registered-premium to false. This deliberately changes the precedence/security policy.
-- /premium requires an already registered and authenticated local account. The request is pending until official verification on a subsequent connection; failed attempts do not silently grant Premium.
+- /premium requires an already registered and authenticated local account. The request is pending until official verification on a subsequent connection; failed attempts do not silently grant Premium. `/premium status` checks it, `/premium cancel` cancels it before verification.
 - Other plugin namespaces are rejected before login, and password failure counts survive reconnects within the configured attempt window.
 - If another plugin takes /login, remove the conflicting auth plugin; Bukkit's namespaced fallback /slogin:login can help diagnose collisions.
 
@@ -108,5 +110,5 @@ config.yml before replacing only the messages section.
 CI uses a **separate non-production** fixture plugin to emulate a successful
 sessionserver response and tests actual RSA, AES and Login Success for
 both pending /premium and a first-time Premium username. The fixture is not
-shipped in SLogin-1.9.0.jar. CI cannot replace the final verification with a
+shipped in SLogin-1.9.1.jar. CI cannot replace the final verification with a
 real Microsoft/Mojang account session.

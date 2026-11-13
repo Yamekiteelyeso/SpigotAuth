@@ -23,6 +23,7 @@ public final class SpigotAuth extends JavaPlugin {
     private PremiumPreferenceStore premiumPreferences;
     private PreAuthGuard preAuthGuard;
     private Paper1201SmartAuthAdapter smartAuthAdapter;
+    private String smartAuthStartupError;
     private MessageService messages;
     private LoginLocationStore loginLocations;
 
@@ -51,6 +52,7 @@ public final class SpigotAuth extends JavaPlugin {
         if (!getServer().getOnlineMode() && getConfig().getBoolean("smart-auth.enabled", true)) {
             smartAuthAdapter = new Paper1201SmartAuthAdapter(this);
             if (!smartAuthAdapter.enable()) {
+                smartAuthStartupError = smartAuthAdapter.failureReason();
                 getLogger().severe("SLogin Smart Authentication no pudo activarse; se mantiene el login local.");
                 smartAuthAdapter = null;
             }
@@ -72,7 +74,7 @@ public final class SpigotAuth extends JavaPlugin {
             return;
         }
 
-        getLogger().info("SLogin v1.9.0 — Synex Login activado. Idioma: " + messages.language());
+        getLogger().info("SLogin v1.9.1 — Synex Login activado. Idioma: " + messages.language());
         if (!getServer().getOnlineMode() && smartAuthAdapter != null) {
             getLogger().info("Premium Smart Auth activo: las cuentas verificadas entran sin /register ni /login.");
         }
@@ -146,6 +148,7 @@ public final class SpigotAuth extends JavaPlugin {
                 && getConfig().getBoolean("smart-auth.enabled", true);
 
         if (!shouldUseSmartAuth) {
+            smartAuthStartupError = null;
             if (smartAuthAdapter != null) {
                 smartAuthAdapter.disable();
                 smartAuthAdapter = null;
@@ -158,12 +161,14 @@ public final class SpigotAuth extends JavaPlugin {
             Paper1201SmartAuthAdapter replacement =
                     new Paper1201SmartAuthAdapter(this);
             if (replacement.enable()) {
+                smartAuthStartupError = null;
                 smartAuthAdapter = replacement;
                 getLogger().info("SLogin Smart Auth activado tras reload.");
             } else {
+                smartAuthStartupError = replacement.failureReason();
                 smartAuthAdapter = null;
                 getLogger().severe(
-                        "SLogin Smart Auth no pudo activarse tras reload."
+                        "SLogin Smart Auth no pudo activarse tras reload: " + smartAuthStartupError
                 );
             }
         }
@@ -197,6 +202,25 @@ public final class SpigotAuth extends JavaPlugin {
 
     public Paper1201SmartAuthAdapter getSmartAuthAdapter() {
         return smartAuthAdapter;
+    }
+
+    /** Explains why enabled:true does not necessarily mean ACTIVE at runtime. */
+    public String getSmartAuthStatusDetail() {
+        if (!getConfig().getBoolean("smart-auth.enabled", true)) {
+            return "smart-auth.enabled=false en config.yml";
+        }
+        if (getServer().getOnlineMode()) {
+            return "online-mode=true: Minecraft ya verifica las cuentas oficiales";
+        }
+        if (!"1.20.1".equals(getServer().getMinecraftVersion())) {
+            return "requiere Paper 1.20.1; detectado " + getServer().getMinecraftVersion();
+        }
+        if (smartAuthAdapter != null && smartAuthAdapter.isEnabled()) {
+            return "challenge y verificacion Mojang preparados";
+        }
+        return smartAuthStartupError != null
+                ? smartAuthStartupError
+                : "adaptador inactivo; revisa el error de arranque en latest.log";
     }
 
     public MessageService getMessages() {

@@ -13,13 +13,16 @@ class PreAuthCommandSecurityTest {
         assertTrue(AuthListener.isAllowedPreAuthCommand("r"));
         assertTrue(AuthListener.isAllowedPreAuthCommand("slogin:login"));
         assertTrue(AuthListener.isAllowedPreAuthCommand("SLOGIN:REG"));
+        // The command itself requires an authenticated player before it can
+        // modify any Premium preference; pre-auth users get an explanation.
+        assertTrue(AuthListener.isAllowedPreAuthCommand("premium"));
+        assertTrue(AuthListener.isAllowedPreAuthCommand("slogin:premium"));
 
         assertFalse(AuthListener.isAllowedPreAuthCommand("otherplugin:login"));
         assertFalse(AuthListener.isAllowedPreAuthCommand("minecraft:register"));
         assertFalse(AuthListener.isAllowedPreAuthCommand("slogin:slogin"));
         assertFalse(AuthListener.isAllowedPreAuthCommand("slogin:login:extra"));
         assertFalse(AuthListener.isAllowedPreAuthCommand("op"));
-        assertFalse(AuthListener.isAllowedPreAuthCommand("premium"));
         assertFalse(AuthListener.isAllowedPreAuthCommand("slogin"));
         assertFalse(AuthListener.isAllowedPreAuthCommand(""));
         assertFalse(AuthListener.isAllowedPreAuthCommand(null));

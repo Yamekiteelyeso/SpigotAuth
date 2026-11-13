@@ -220,6 +220,10 @@ public final class SLoginCommand implements CommandExecutor, TabCompleter {
                 "lookup", plugin.getConfig().getBoolean(
                         "smart-auth.challenge-if-premium-nickname", true)
         ));
+        plugin.getMessages().send(sender, "admin.status-premium-detail", Map.of(
+                "configured", plugin.getConfig().getBoolean("smart-auth.enabled", true),
+                "reason", plugin.getSmartAuthStatusDetail()
+        ));
         plugin.getMessages().send(sender, "admin.status-locations", Map.of(
                 "login", plugin.getLoginLocations().get(LoginLocationStore.Spot.SPAWNLOGIN) == null
                         ? "UNSET" : "SET",

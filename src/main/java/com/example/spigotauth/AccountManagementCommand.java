@@ -25,16 +25,20 @@ public final class AccountManagementCommand implements CommandExecutor, TabCompl
             return true;
         }
 
+        if (command.getName().equalsIgnoreCase("premium")) {
+            if (!plugin.getAuth().isAuthenticated(player)) {
+                plugin.getMessages().send(player, "premium.command-login-first");
+                return true;
+            }
+            return enablePremium(player, args);
+        }
+
         if (!plugin.getAuth().isAuthenticated(player)) {
             return true;
         }
 
         if (command.getName().equalsIgnoreCase("changepass")) {
             return changePassword(player, args);
-        }
-
-        if (command.getName().equalsIgnoreCase("premium")) {
-            return enablePremium(player, args);
         }
 
         return false;
@@ -76,6 +80,12 @@ public final class AccountManagementCommand implements CommandExecutor, TabCompl
     }
 
     private boolean enablePremium(Player player, String[] args) {
+        if (args.length == 1 && args[0].equalsIgnoreCase("status")) {
+            return premiumStatus(player);
+        }
+        if (args.length == 1 && args[0].equalsIgnoreCase("cancel")) {
+            return cancelPremium(player);
+        }
         if (args.length != 0) {
             plugin.getMessages().send(player, "premium.command-usage");
             return true;
@@ -101,9 +111,13 @@ public final class AccountManagementCommand implements CommandExecutor, TabCompl
             return true;
         }
 
+        if (plugin.getServer().getOnlineMode()) {
+            plugin.getMessages().send(player, "premium.command-online-mode");
+            return true;
+        }
         Paper1201SmartAuthAdapter adapter = plugin.getSmartAuthAdapter();
-        if (plugin.getServer().getOnlineMode() || adapter == null || !adapter.isEnabled()) {
-            plugin.getMessages().send(player, "premium.command-disabled");
+        if (adapter == null || !adapter.isEnabled()) {
+            sendDisabledReason(player);
             return true;
         }
 
@@ -118,11 +132,50 @@ public final class AccountManagementCommand implements CommandExecutor, TabCompl
         plugin.getMessages().sendLines(player, "premium.command-ready",
                 java.util.Map.of("player", name));
 
-        // Ask the user to reconnect explicitly: surprise-kicking can look like
-        // /premium is broken. The local password remains stored until official
-        // session verification succeeds.
+        // No false activation: Mojang proves ownership on the next connection.
         return true;
     }
+
+    private boolean premiumStatus(Player player) {
+        String name = player.getName();
+        if (plugin.getPremiumAccounts().isProtectedName(name)
+                || plugin.getPremiumPreferences().isVerified(name)) {
+            plugin.getMessages().send(player, "premium.command-already");
+        } else if (plugin.getPremiumPreferences().isPending(name)) {
+            plugin.getMessages().send(player, "premium.command-pending");
+        } else if (plugin.getServer().getOnlineMode()) {
+            plugin.getMessages().send(player, "premium.command-online-mode");
+        } else {
+            Paper1201SmartAuthAdapter adapter = plugin.getSmartAuthAdapter();
+            if (adapter == null || !adapter.isEnabled()) {
+                sendDisabledReason(player);
+            } else if (!plugin.getAccounts().isRegistered(name)) {
+                plugin.getMessages().send(player, "premium.command-register-first");
+            } else {
+                plugin.getMessages().send(player, "premium.command-not-pending");
+            }
+        }
+        return true;
+    }
+
+    private boolean cancelPremium(Player player) {
+        String name = player.getName();
+        if (!plugin.getPremiumPreferences().isPending(name)) {
+            plugin.getMessages().send(player, "premium.command-nothing-to-cancel");
+        } else if (plugin.getPremiumPreferences().clear(name)) {
+            plugin.getMessages().send(player, "premium.command-cancelled");
+        } else {
+            plugin.getMessages().send(player, "premium.command-save-error");
+        }
+        return true;
+    }
+
+    private void sendDisabledReason(Player player) {
+        plugin.getMessages().send(player, "premium.command-disabled");
+        plugin.getMessages().send(player, "premium.command-disabled-detail",
+                Map.of("reason", plugin.getSmartAuthStatusDetail()));
+    }
+
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command,
                                       String alias, String[] args) {

@@ -1,5 +1,5 @@
 name: SLogin
-version: 1.9.0
+version: 1.9.1
 main: com.example.spigotauth.SpigotAuth
 api-version: '1.20'
 author: Yamekiteelyeso
@@ -19,7 +19,7 @@ commands:
     aliases: [changepassword]
   premium:
     description: Mark your own account for Premium verification.
-    usage: /premium
+    usage: /premium [status|cancel]
   slogin:
     description: SLogin management, diagnostics, and login spawn locations.
     usage: /slogin <help|status|reload|spawnlogin|loginready|premiumcancel|premiumcheck|resetmessages>

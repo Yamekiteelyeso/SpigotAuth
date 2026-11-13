@@ -41,7 +41,8 @@ public final class AuthListener implements Listener {
 
     private static final Set<String> ALLOWED_COMMANDS = Set.of(
             "login", "l", "log",
-            "register", "r", "reg"
+            "register", "r", "reg",
+            "premium"
     );
 
     private final SpigotAuth plugin;

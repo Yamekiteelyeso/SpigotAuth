@@ -48,6 +48,7 @@ public final class Paper1201SmartAuthAdapter {
     private final java.util.Set<Channel> activeChannels = ConcurrentHashMap.newKeySet();
 
     private volatile boolean enabled;
+    private volatile String failureReason;
     private Paper1201LoginAccess loginAccess;
     private VanillaSessionVerifier sessionVerifier;
 
@@ -58,14 +59,18 @@ public final class Paper1201SmartAuthAdapter {
 
     public boolean enable() {
         if (!"1.20.1".equals(plugin.getServer().getMinecraftVersion())) {
-            logger.severe("SLogin Smart Auth requiere exactamente Paper 1.20.1.");
+            failureReason = "requiere Paper 1.20.1; detectado "
+                    + plugin.getServer().getMinecraftVersion();
+            logger.severe("SLogin Smart Auth " + failureReason);
             return false;
         }
         if (!(plugin.getServer() instanceof CraftServer)) {
-            logger.severe("SLogin Smart Auth requiere Paper/CraftBukkit 1.20.1.");
+            failureReason = "requiere el servidor Paper 1.20.1 (no Spigot ni forks incompatibles)";
+            logger.severe("SLogin Smart Auth " + failureReason);
             return false;
         }
         if (plugin.getServer().getOnlineMode()) {
+            failureReason = "online-mode=true: Minecraft ya verifica Premium";
             logger.info("SLogin detectó online-mode=true; Minecraft ya verifica Premium.");
             return false;
         }
@@ -83,6 +88,7 @@ public final class Paper1201SmartAuthAdapter {
                     minecraftServer.getSessionService());
 
             enabled = true;
+            failureReason = null;
             ChannelInitializeListenerHolder.addListener(INITIALIZER_KEY, this::install);
 
             logger.info("SLogin Smart Auth validado y activo para online-mode=false.");
@@ -90,6 +96,12 @@ public final class Paper1201SmartAuthAdapter {
             return true;
         } catch (Throwable failure) {
             enabled = false;
+            String detail = failure.getMessage();
+            failureReason = failure.getClass().getSimpleName()
+                    + (detail == null || detail.isBlank() ? "" : ": " + detail);
+            if (failureReason.length() > 200) {
+                failureReason = failureReason.substring(0, 200);
+            }
             loginAccess = null;
             if (sessionVerifier != null) {
                 sessionVerifier.close();
@@ -105,6 +117,10 @@ public final class Paper1201SmartAuthAdapter {
 
     public boolean isEnabled() {
         return enabled;
+    }
+
+    public String failureReason() {
+        return failureReason == null ? "sin detalles; revisa latest.log" : failureReason;
     }
 
     public void disable() {
