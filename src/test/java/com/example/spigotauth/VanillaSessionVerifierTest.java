@@ -10,6 +10,13 @@ import static org.junit.jupiter.api.Assertions.*;
 class VanillaSessionVerifierTest {
 
     @Test
+    void authlib10ProfileResultContainsAuthenticatedProfile() throws Exception {
+        Class<?> result = Class.forName("com.mojang.authlib.services.ProfileResult");
+        Method accessor = result.getMethod("profile");
+        assertEquals(GameProfile.class, accessor.getReturnType());
+    }
+
+    @Test
     void resolvesAuthlibHasJoinedServerSignature() throws Exception {
         // The 26.3 service API moved; exercise the verifier contract
         // against the CI fake instead of a removed Authlib class name.
