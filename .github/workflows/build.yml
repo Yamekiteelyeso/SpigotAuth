@@ -52,6 +52,8 @@ jobs:
 
           cat > "$SERVER_DIR/server.properties" <<'EOF'
           online-mode=false
+          white-list=false
+          enforce-whitelist=false
           prevent-proxy-connections=false
           server-port=25579
           max-players=2
