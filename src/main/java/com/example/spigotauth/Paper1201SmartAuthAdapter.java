@@ -237,7 +237,7 @@ public final class Paper1201SmartAuthAdapter {
             // solely as a hint to request the standard Mojang session proof.
             // This helps first-time official clients even if public nickname
             // lookups are throttled. Forged UUIDs can never grant access.
-            UUID clientHint = hello.profileId();
+            UUID clientHint = hello.profileId().orElse(null);
             if (plugin.getConfig().getBoolean(
                     "smart-auth.challenge-if-client-online-uuid", true)
                     && looksLikeOnlineUuid(clientHint)) {
