@@ -14,14 +14,14 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '25'
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.5'
+          gradle-version: '9.8'
       - name: Build and test
         run: gradle --no-daemon clean build integrationFixtureJar
 
-      - name: Boot-test Paper 1.20.1 with online-mode=false
+      - name: Boot-test Paper 26.3 with online-mode=false
         shell: bash
         timeout-minutes: 4
         run: |
@@ -33,13 +33,13 @@ jobs:
           USER_AGENT="SLogin-CI/1.0 (https://github.com/Yamekiteelyeso/SpigotAuth)"
           BUILDS=$(curl -fsSL \
             -H "User-Agent: $USER_AGENT" \
-            "https://fill.papermc.io/v3/projects/paper/versions/1.20.1/builds")
+            "https://fill.papermc.io/v3/projects/paper/versions/26.3/builds")
 
           PAPER_URL=$(echo "$BUILDS" | jq -r \
             'first(.[] | select(.channel == "STABLE") | .downloads."server:default".url) // empty')
 
           if [ -z "$PAPER_URL" ]; then
-            echo "No stable Paper 1.20.1 build was returned by PaperMC."
+            echo "No stable Paper 26.3 build was returned by PaperMC."
             exit 1
           fi
 
@@ -66,7 +66,7 @@ jobs:
           EOF
 
           REPO_ROOT="$PWD"
-          PLUGIN_JAR="$PWD/build/libs/SLogin-1.9.0.jar"
+          PLUGIN_JAR="$PWD/build/libs/SLogin-2.0.0-26.3.jar"
           CI_FIXTURE_JAR="$PWD/build/libs/SLogin-CI-Fixture.jar"
 
           test -f "$PLUGIN_JAR" || { echo "Missing production reobfuscated JAR"; exit 1; }
@@ -144,7 +144,7 @@ jobs:
             exit 1
           fi
 
-          # Protocol 763 (Minecraft 1.20.1): Handshake -> Login Start.
+          # Protocol 763 (Minecraft 26.3): Handshake -> Login Start.
           # The seeded Premium identity must receive Login Encryption Request
           # packet id 0x01 even though server.properties uses online-mode=false.
           python3 - <<'PY'
@@ -157,7 +157,7 @@ jobs:
 
           HOST = "127.0.0.1"
           PORT = 25579
-          PROTOCOL = 763
+          PROTOCOL = 777
           USERNAME = "Notch"
 
           def varint(value):
@@ -227,7 +227,7 @@ jobs:
               )
               send_packet(sock, handshake)
 
-              # 1.20.1 ServerboundHelloPacket:
+              # 26.3 ServerboundHelloPacket:
               # packet id 0x00, username, Optional<UUID>.
               login_start = varint(0x00) + mc_string(USERNAME) + b"\x00"
               send_packet(sock, login_start)
@@ -454,7 +454,7 @@ jobs:
           fi
           echo "SLogin security smoke test: tampered Premium encryption response rejected."
 
-          grep -q "SLogin v1.9.0" server.log
+          grep -q "SLogin v2.0.0-26.3" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
 
           # Command-map smoke test: every public/admin command must have
@@ -495,6 +495,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SLogin-1.9.0
-          path: build/libs/SLogin-1.9.0.jar
+          name: SLogin-2.0.0-26.3
+          path: build/libs/SLogin-2.0.0-26.3.jar
           if-no-files-found: error
