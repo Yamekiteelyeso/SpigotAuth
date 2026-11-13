@@ -220,6 +220,11 @@ public final class SLoginCommand implements CommandExecutor, TabCompleter {
                 "lookup", plugin.getConfig().getBoolean(
                         "smart-auth.challenge-if-premium-nickname", true)
         ));
+        plugin.getMessages().send(sender, "admin.status-auth-mode", Map.of(
+                "mode", plugin.getConfig().getBoolean(
+                        "smart-auth.require-register-before-premium", false)
+                        ? "REGISTER + /premium" : "AUTO PREMIUM"
+        ));
         plugin.getMessages().send(sender, "admin.status-premium-detail", Map.of(
                 "configured", plugin.getConfig().getBoolean("smart-auth.enabled", true),
                 "reason", plugin.getSmartAuthStatusDetail()

@@ -35,6 +35,11 @@ class PluginMetadataTest {
     @Test
     void teleportSettingsAndBilingualMessagesExist() {
         var config = load("config.yml");
+        var messages = load("messages.yml");
+        assertFalse(config.contains("messages.es"),
+                "Chat texts must not be stored in config.yml.");
+        assertFalse(config.getBoolean("smart-auth.require-register-before-premium"),
+                "Manual Premium onboarding must be opt-in.");
         assertTrue(config.getBoolean("teleports.on-join-to-spawnlogin"));
         assertTrue(config.getBoolean("teleports.after-auth-to-loginready"));
         assertTrue(config.getLong("security.attempt-window-seconds") > 0);
@@ -58,6 +63,7 @@ class PluginMetadataTest {
                     "admin.location-teleported",
                     "admin.location-info",
                     "admin.status-server",
+                    "admin.status-auth-mode",
                     "admin.status-locations",
                     "admin.help-spawnlogin",
                     "admin.help-loginready",
@@ -65,7 +71,7 @@ class PluginMetadataTest {
                     "login.prompt",
                     "register.prompt"
             }) {
-                assertTrue(config.contains("messages." + locale + "." + key),
+                assertTrue(messages.contains(locale + "." + key),
                         "Missing " + locale + " message: " + key);
             }
         }

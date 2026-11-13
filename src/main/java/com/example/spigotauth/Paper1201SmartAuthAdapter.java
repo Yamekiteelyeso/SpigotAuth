@@ -267,6 +267,21 @@ public final class Paper1201SmartAuthAdapter {
                 return;
             }
 
+            // Opt-in local-first onboarding applies ONLY to unbound names.
+            // Existing verified/pending Premium bindings above remain
+            // fail-closed and require the official encrypted Mojang proof.
+            // Do not interpret a client's UUID or public nickname as proof.
+            if (requireLocalRegistrationFirst(
+                    plugin.getConfig().getBoolean(
+                            "smart-auth.require-register-before-premium", false),
+                    expected != null || plugin.getPremiumAccounts().isProtectedName(name)
+                            || plugin.getPremiumPreferences().isVerified(name),
+                    plugin.getPremiumPreferences().isPending(name))) {
+                debug("Registro local requerido antes de /premium: " + name);
+                continueOffline(ctx, originalPacket);
+                return;
+            }
+
             // The optional 1.20.1 Login Start UUID is UNTRUSTED. Use it
             // solely as a hint to request the standard Mojang session proof.
             // This helps first-time official clients even if public nickname
@@ -612,6 +627,13 @@ public final class Paper1201SmartAuthAdapter {
      * standard offline-mode UUID and denies an already protected name.
      * All other clients must still prove ownership through Mojang.
      */
+    /** A verified binding or a pending /premium migration always wins. */
+    static boolean requireLocalRegistrationFirst(boolean configured,
+                                                 boolean boundPremium,
+                                                 boolean pendingMigration) {
+        return configured && !boundPremium && !pendingMigration;
+    }
+
     static boolean isOfflineUuidClaim(String name, UUID clientUuid, UUID officialUuid) {
         if (name == null || clientUuid == null || officialUuid == null) return false;
         UUID offline = UUID.nameUUIDFromBytes(
