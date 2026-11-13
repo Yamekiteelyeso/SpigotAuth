@@ -596,7 +596,7 @@ public final class Paper1201SmartAuthAdapter {
         for (java.lang.reflect.Method method : server.getClass().getMethods()) {
             if (method.getParameterCount() == 0
                     && method.getReturnType().getName()
-                            .contains("MinecraftSessionService")) {
+                            .contains("SessionService")) {
                 return method.invoke(server);
             }
         }
@@ -612,7 +612,7 @@ public final class Paper1201SmartAuthAdapter {
             for (java.lang.reflect.Method member : services.getClass().getMethods()) {
                 if (member.getParameterCount() == 0
                         && member.getReturnType().getName()
-                                .contains("MinecraftSessionService")) {
+                                .contains("SessionService")) {
                     return member.invoke(services);
                 }
             }
