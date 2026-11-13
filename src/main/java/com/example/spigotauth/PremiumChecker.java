@@ -34,7 +34,8 @@ public final class PremiumChecker {
 
     private static final String[] LOOKUP_ENDPOINTS = {
             "https://api.minecraftservices.com/minecraft/profile/lookup/name/",
-            "https://api.mojang.com/users/profiles/minecraft/"
+            "https://api.mojang.com/users/profiles/minecraft/",
+            "https://api.mojang.com/minecraft/profile/lookup/name/"
     };
 
     private final SpigotAuth plugin;
@@ -71,8 +72,15 @@ public final class PremiumChecker {
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             Result result = queryProfile(name);
             if (result.status() != Status.UNAVAILABLE && cacheMillis > 0) {
-                cache.put(key, new CacheEntry(
-                        result, System.currentTimeMillis() + cacheMillis));
+                long ttl = result.status() == Status.NOT_FOUND
+                        ? Math.min(cacheMillis, Math.max(0L,
+                                plugin.getConfig().getLong(
+                                        "premium-negative-cache-seconds", 45L)) * 1000L)
+                        : cacheMillis;
+                if (ttl > 0) {
+                    cache.put(key, new CacheEntry(
+                            result, System.currentTimeMillis() + ttl));
+                }
             }
 
             plugin.getServer().getScheduler().runTask(plugin, () -> {
@@ -82,19 +90,19 @@ public final class PremiumChecker {
     }
 
     private Result queryProfile(String name) {
-        Result primary = queryEndpoint(LOOKUP_ENDPOINTS[0] + name, name);
-        if (primary.status() == Status.PREMIUM) return primary;
-
-        // A single HTTP 404 is not sufficient to classify a nickname as
-        // cracked: Mojang gateways and caches can disagree temporarily.
-        Result alternate = queryEndpoint(LOOKUP_ENDPOINTS[1] + name, name);
-        if (alternate.status() == Status.PREMIUM) return alternate;
-
-        if (primary.status() == Status.NOT_FOUND
-                && alternate.status() == Status.NOT_FOUND) {
-            return new Result(Status.NOT_FOUND, null);
+        // A successful profile is still only a reason to run the official
+        // encrypted challenge; never authorize an account from this lookup.
+        // Mojang endpoints may disagree due to temporary rate limits and
+        // occasional 403s. Require unanimous NOT_FOUND to classify offline.
+        int notFound = 0;
+        for (String base : LOOKUP_ENDPOINTS) {
+            Result result = queryEndpoint(base + name, name);
+            if (result.status() == Status.PREMIUM) return result;
+            if (result.status() == Status.NOT_FOUND) notFound++;
         }
-        return new Result(Status.UNAVAILABLE, null);
+        return notFound == LOOKUP_ENDPOINTS.length
+                ? new Result(Status.NOT_FOUND, null)
+                : new Result(Status.UNAVAILABLE, null);
     }
 
     private Result queryEndpoint(String endpoint, String requestedName) {
@@ -105,7 +113,7 @@ public final class PremiumChecker {
             connection.setConnectTimeout(4000);
             connection.setReadTimeout(4000);
             connection.setRequestProperty("Accept", "application/json");
-            connection.setRequestProperty("User-Agent", "SLogin/1.8.0");
+            connection.setRequestProperty("User-Agent", "SLogin/1.9.0");
 
             int status = connection.getResponseCode();
             if (status == HttpURLConnection.HTTP_OK) {

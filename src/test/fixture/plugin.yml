@@ -1,0 +1,6 @@
+name: SLoginCIFixture
+version: 1.0
+main: ci.fixture.SessionStubPlugin
+api-version: '1.20'
+depend: [SLogin]
+description: CI-only fake Mojang session service; never ship this plugin.

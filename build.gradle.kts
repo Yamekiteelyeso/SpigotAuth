@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.example"
-version = "1.8.1"
+version = "1.9.0"
 
 repositories {
     mavenCentral()
@@ -26,9 +26,25 @@ tasks.test {
 
 tasks.jar {
     archiveBaseName.set("SLogin")
-    archiveVersion.set("1.8.1")
+    archiveVersion.set("1.9.0")
 }
 
 tasks.assemble {
     dependsOn(tasks.reobfJar)
+}
+
+/**
+ * Test-only authlib fixture. Never part of the production reobfuscated jar.
+ * It lets CI test a complete RSA/AES/PlayerJoin path with a mocked session
+ * provider, without requiring Microsoft credentials or a production bypass.
+ */
+tasks.register<Jar>("integrationFixtureJar") {
+    dependsOn(tasks.testClasses)
+    archiveFileName.set("SLogin-CI-Fixture.jar")
+    from(sourceSets.test.get().output) {
+        include("ci/fixture/SessionStubPlugin*.class")
+    }
+    from("src/test/fixture") {
+        include("plugin.yml")
+    }
 }

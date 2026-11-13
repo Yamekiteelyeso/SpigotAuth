@@ -23,6 +23,9 @@ teleports:
 
 # Cache del lookup de perfiles Java.
 premium-cache-minutes: 10
+# Los nombres no encontrados se guardan durante menos tiempo para evitar
+# que un 404 temporal impida el primer ingreso de una cuenta original.
+premium-negative-cache-seconds: 45
 
 smart-auth:
   enabled: true
@@ -35,6 +38,12 @@ smart-auth:
   # Si está activo, un nick que exista como Premium puede recibir el challenge
   # oficial incluso en su primer acceso, similar a nLogin Premium.
   challenge-if-premium-nickname: true
+
+  # En 1.20.1, el cliente puede anunciar su UUID en Login Start.
+  # Un UUID v4 solo sirve para decidir si pedir la prueba de sesión Premium.
+  # NO autoriza por sí solo: SLogin siempre exige cifrado + hasJoinedServer.
+  # Puedes desactivarlo si tu launcher offline envía UUIDs v4 inventados.
+  challenge-if-client-online-uuid: true
 
   # También intenta verificar por Mojang los nombres que ya aparecen en
   # accounts.yml. Si la sesión Premium se verifica, entra sin /login.
@@ -66,13 +75,13 @@ smart-auth:
 # Mensajes editables. El idioma activo se elige arriba con language: es/en.
 messages:
   es:
-    prefix: "&8[&b&lSLOGIN&8] &r"
+    prefix: "&8[&b&lSLOGIN&8] &7» &r"
     premium:
       verified:
-        - "&8&m--------------------------------"
-        - "&a&l✓ CUENTA PREMIUM VERIFICADA"
-        - "&7¡Bienvenido, &f{player}&7! No necesitas contraseña."
-        - "&8&m--------------------------------"
+        - ""
+        - "&8▎ &b&lSLOGIN &8• &a&lPREMIUM"
+        - "&7Identidad oficial confirmada para &f{player}&7."
+        - "&a✓ &fAcceso automático &8· &7Sin contraseña"
       save-error: "&cNo se pudo guardar tu identidad Premium. Inténtalo de nuevo."
       verification-unavailable: "&cMojang no respondió. Comprueba tu conexión e inténtalo de nuevo. Tu migración pendiente se conserva."
       verification-invalid: "&cTu sesión Premium no se pudo confirmar. Inicia sesión otra vez en el launcher oficial y reconecta."
@@ -80,23 +89,15 @@ messages:
       incompatible-login-state: "&cTu conexión llegó en un estado de login no compatible."
       question:
         - ""
-        - "&e¿Tu cuenta de Minecraft es Premium?"
-        - "&7Si quieres entrar automáticamente en futuros accesos, usa &f/premium&7."
-        - "&7Solo se activará después de verificar que realmente eres el dueño."
-        - ""
+        - "&8▎ &b&lSLOGIN &8• &f¿Tienes Minecraft original?"
+        - "&7Puedes vincularlo con &b/premium &7para entrar automáticamente."
+        - "&8Solo se activa tras verificar tu sesión oficial."
       command-ready:
         - ""
-        - "&8&m                                        "
-        - "&b&lSLOGIN &8• &f&lMODO PREMIUM"
-        - "&7Tu solicitud está lista, &f{player}&7."
-        - ""
-        - "&f➜ &7Sal del servidor y vuelve a entrar"
-        - "&f➜ &7Utiliza el launcher oficial de Minecraft"
-        - "&f➜ &7Verificaremos tu cuenta con Mojang"
-        - ""
-        - "&e¡Importante! &7Tu contraseña sigue guardada"
-        - "&7hasta confirmar que eres el propietario."
-        - "&8&m                                        "
+        - "&8▎ &b&lSLOGIN &8• &fVINCULAR PREMIUM"
+        - "&a✓ &fSolicitud guardada para &b{player}&f."
+        - "&7Sal y vuelve a entrar con tu &flauncher oficial&7."
+        - "&8Tu contraseña local seguirá guardada hasta verificarte."
       command-disabled: "{prefix}&cLa verificación Premium está desactivada. &7Pide a un administrador que revise &f/slogin status&7."
       command-usage: "{prefix}&eUso: &f/premium"
       command-register-first: "{prefix}&cPrimero debes tener una cuenta local registrada y haber iniciado sesión."
@@ -110,8 +111,8 @@ messages:
       command-reconnect: "&bSLogin &8» &fVuelve a entrar con tu Minecraft original para confirmar Premium."
     auth:
       already-authenticated: "{prefix}&aYa estás autenticado."
-      registered: "{prefix}&a&l✓ &fRegistro completado. ¡Disfruta del servidor!"
-      logged-in: "{prefix}&a&l✓ &fSesión iniciada. ¡Bienvenido otra vez!"
+      registered: "{prefix}&a✓ &fCuenta registrada correctamente. ¡Bienvenido!"
+      logged-in: "{prefix}&a✓ &fSesión iniciada. ¡Bienvenido de nuevo!"
       wrong-password: "{prefix}&cContraseña incorrecta. &7Intentos restantes: &f{remaining}&7."
       locked: "{prefix}&cDemasiados intentos. &7Espera &f{seconds}s&7."
       locked-kick: "&cDemasiados intentos de acceso.\n&7Vuelve a intentarlo en &f{minutes} minutos&7."
@@ -120,13 +121,11 @@ messages:
       command-blocked: "{prefix}&cAutentícate antes de usar otros comandos."
     register:
       prompt:
-        - "&8&m--------------------------------"
-        - "&b&lCREA TU CUENTA"
-        - "&7Para jugar, registra una contraseña:"
-        - "&f/register <contraseña> <confirmar>"
-        - "&7También puedes usar &f/r <contraseña> <confirmar>"
-        - "&7Tiempo disponible: &f{seconds} segundos&7."
-        - "&8&m--------------------------------"
+        - ""
+        - "&8▎ &b&lSLOGIN &8• &fCREAR CUENTA"
+        - "&7Protege tu cuenta para comenzar a jugar."
+        - "&b/register &f<clave> <confirmar> &8· &7También &f/r"
+        - "&8Tiempo disponible: &f{seconds}s"
       already-registered: "{prefix}&eYa estás registrado. Usa &f/login <contraseña>&e."
       usage: "{prefix}&eUso: &f/register <contraseña> <confirmar>"
       length: "{prefix}&cLa contraseña debe tener entre &f{min}&c y &f{max}&c caracteres."
@@ -134,12 +133,11 @@ messages:
       save-error: "{prefix}&cNo se pudo guardar tu cuenta. Contacta a un administrador."
     login:
       prompt:
-        - "&8&m--------------------------------"
-        - "&b&lINICIA SESIÓN"
-        - "&7Usa &f/login <contraseña>"
-        - "&7También puedes usar &f/l <contraseña>"
-        - "&7Tiempo disponible: &f{seconds} segundos&7."
-        - "&8&m--------------------------------"
+        - ""
+        - "&8▎ &b&lSLOGIN &8• &fINICIAR SESIÓN"
+        - "&7Esta cuenta tiene contraseña. Inicia sesión para jugar."
+        - "&b/login &f<contraseña> &8· &7También &f/l"
+        - "&8Tiempo disponible: &f{seconds}s"
       not-registered: "{prefix}&eNo estás registrado. Usa &f/register <contraseña> <confirmar>&e."
       usage: "{prefix}&eUso: &f/login <contraseña> &7o &f/l <contraseña>"
     changepass:
@@ -151,6 +149,9 @@ messages:
     admin:
       reload-ok: "{prefix}&a✓ &fConfiguración recargada. Idioma: &b{language}&f."
       no-permission: "{prefix}&cNo tienes permiso para administrar SLogin."
+      reset-messages-ok: "{prefix}&a✓ &fNuevo estilo de mensajes activado. &7Se creó una copia de config.yml."
+      reset-messages-failed: "{prefix}&cNo se pudieron restaurar los mensajes. Revisa permisos y consola."
+      help-reset-messages: "&b/slogin resetmessages &7Carga los nuevos mensajes ES/EN y guarda una copia de la configuración."
       premium-cancel-usage: "{prefix}&eUso: &f/slogin premiumcancel <jugador> &7(únicamente migraciones pendientes)"
       premium-cancel-not-pending: "{prefix}&e{player} &7no tiene una migración Premium pendiente."
       premium-cancel-ok: "{prefix}&a✓ &7Migración pendiente cancelada para &f{player}&7. Puede volver a usar su contraseña local."
@@ -162,7 +163,7 @@ messages:
       premium-check-found: "{prefix}&aPerfil Premium encontrado: &f{player} &8(&7{uuid}&8)&a. &7Esto no autentica al jugador."
       premium-check-missing: "{prefix}&eEl nombre &f{player} &eno aparece en los servicios de perfiles consultados."
       premium-check-unavailable: "{prefix}&cNo se pudo completar la consulta para &f{player}&c. Comprueba DNS, proxy y acceso HTTP saliente."
-      usage: "{prefix}&eUso: &f/slogin <help|status|reload|spawnlogin|loginready|premiumcancel|premiumcheck>"
+      usage: "{prefix}&eUso: &f/slogin <help|status|reload|resetmessages|spawnlogin|loginready|premiumcancel|premiumcheck>"
       help-header: "&8&m----------------------------------------"
       help-commands: "&b&lSLOGIN &8• &fComandos administrativos: &7/slogin status, /slogin reload"
       help-spawnlogin: "&b/slogin spawnlogin &8[set|show|delete|tp] &7Punto para jugadores sin autenticar."
@@ -184,13 +185,13 @@ messages:
       player-only: "{prefix}&cEste comando solo se puede usar dentro del juego."
 
   en:
-    prefix: "&8[&b&lSLOGIN&8] &r"
+    prefix: "&8[&b&lSLOGIN&8] &7» &r"
     premium:
       verified:
-        - "&8&m--------------------------------"
-        - "&a&l✓ PREMIUM ACCOUNT VERIFIED"
-        - "&7Welcome, &f{player}&7! No password required."
-        - "&8&m--------------------------------"
+        - ""
+        - "&8▎ &b&lSLOGIN &8• &a&lPREMIUM"
+        - "&7Official identity confirmed for &f{player}&7."
+        - "&a✓ &fAutomatic login &8· &7No password needed"
       save-error: "&cYour Premium identity could not be saved. Try again."
       verification-unavailable: "&cMojang did not respond. Check your connection and try again. Pending migration is preserved."
       verification-invalid: "&cYour Premium session could not be confirmed. Sign in again using the official launcher and reconnect."
@@ -198,23 +199,15 @@ messages:
       incompatible-login-state: "&cYour connection reached an unsupported login state."
       question:
         - ""
-        - "&eIs your Minecraft account Premium?"
-        - "&7If you want automatic login on future joins, use &f/premium&7."
-        - "&7It will only activate after SLogin proves you own that account."
-        - ""
+        - "&8▎ &b&lSLOGIN &8• &fOwn Minecraft Java?"
+        - "&7Use &b/premium &7to enable automatic login."
+        - "&8Only an officially verified session can activate it."
       command-ready:
         - ""
-        - "&8&m                                        "
-        - "&b&lSLOGIN &8• &f&lPREMIUM MODE"
-        - "&7Your request is ready, &f{player}&7."
-        - ""
-        - "&f➜ &7Leave and reconnect to the server"
-        - "&f➜ &7Use your official Minecraft launcher"
-        - "&f➜ &7We'll verify your account with Mojang"
-        - ""
-        - "&eImportant! &7Your password stays saved"
-        - "&7until ownership is verified."
-        - "&8&m                                        "
+        - "&8▎ &b&lSLOGIN &8• &fLINK PREMIUM"
+        - "&a✓ &fRequest saved for &b{player}&f."
+        - "&7Reconnect using your &fofficial Minecraft launcher&7."
+        - "&8Your local password stays saved until verification."
       command-disabled: "{prefix}&cPremium verification is disabled. &7Ask an admin to check &f/slogin status&7."
       command-usage: "{prefix}&eUsage: &f/premium"
       command-register-first: "{prefix}&cYou must first have a registered local account and be logged in."
@@ -228,8 +221,8 @@ messages:
       command-reconnect: "&bSLogin &8» &fReconnect with your official Minecraft account to confirm Premium."
     auth:
       already-authenticated: "{prefix}&aYou are already authenticated."
-      registered: "{prefix}&a&l✓ &fRegistration complete. Enjoy the server!"
-      logged-in: "{prefix}&a&l✓ &fLogged in. Welcome back!"
+      registered: "{prefix}&a✓ &fAccount created. Welcome!"
+      logged-in: "{prefix}&a✓ &fSigned in. Welcome back!"
       wrong-password: "{prefix}&cIncorrect password. &7Attempts remaining: &f{remaining}&7."
       locked: "{prefix}&cToo many attempts. &7Wait &f{seconds}s&7."
       locked-kick: "&cToo many login attempts.\n&7Try again in &f{minutes} minutes&7."
@@ -238,13 +231,11 @@ messages:
       command-blocked: "{prefix}&cAuthenticate before using other commands."
     register:
       prompt:
-        - "&8&m--------------------------------"
-        - "&b&lCREATE AN ACCOUNT"
-        - "&7To play, set a password:"
-        - "&f/register <password> <confirm>"
-        - "&7You can also use &f/r <password> <confirm>"
-        - "&7Time remaining: &f{seconds} seconds&7."
-        - "&8&m--------------------------------"
+        - ""
+        - "&8▎ &b&lSLOGIN &8• &fCREATE ACCOUNT"
+        - "&7Protect your account before playing."
+        - "&b/register &f<password> <confirm> &8· &7Also &f/r"
+        - "&8Time remaining: &f{seconds}s"
       already-registered: "{prefix}&eYou are already registered. Use &f/login <password>&e."
       usage: "{prefix}&eUsage: &f/register <password> <confirm>"
       length: "{prefix}&cPassword length must be between &f{min}&c and &f{max}&c characters."
@@ -252,12 +243,11 @@ messages:
       save-error: "{prefix}&cYour account could not be saved. Contact an administrator."
     login:
       prompt:
-        - "&8&m--------------------------------"
-        - "&b&lLOGIN REQUIRED"
-        - "&7Use &f/login <password>"
-        - "&7You can also use &f/l <password>"
-        - "&7Time remaining: &f{seconds} seconds&7."
-        - "&8&m--------------------------------"
+        - ""
+        - "&8▎ &b&lSLOGIN &8• &fSIGN IN"
+        - "&7This account has a password. Sign in to play."
+        - "&b/login &f<password> &8· &7Also &f/l"
+        - "&8Time remaining: &f{seconds}s"
       not-registered: "{prefix}&eYou are not registered. Use &f/register <password> <confirm>&e."
       usage: "{prefix}&eUsage: &f/login <password> &7or &f/l <password>"
     changepass:
@@ -269,6 +259,9 @@ messages:
     admin:
       reload-ok: "{prefix}&a✓ &fConfiguration reloaded. Language: &b{language}&f."
       no-permission: "{prefix}&cYou do not have permission to manage SLogin."
+      reset-messages-ok: "{prefix}&a✓ &fNew message style enabled. &7A config.yml backup was created."
+      reset-messages-failed: "{prefix}&cCould not reset messages. Check file permissions and console."
+      help-reset-messages: "&b/slogin resetmessages &7Loads the new EN/ES messages and backs up the previous configuration."
       premium-cancel-usage: "{prefix}&eUsage: &f/slogin premiumcancel <player> &7(pending migrations only)"
       premium-cancel-not-pending: "{prefix}&e{player} &7has no pending Premium migration."
       premium-cancel-ok: "{prefix}&a✓ &7Pending migration cancelled for &f{player}&7. They can use their local password again."
@@ -280,7 +273,7 @@ messages:
       premium-check-found: "{prefix}&aPremium profile found: &f{player} &8(&7{uuid}&8)&a. &7This does not authenticate the client."
       premium-check-missing: "{prefix}&eThe name &f{player} &ewas not found by the profile services."
       premium-check-unavailable: "{prefix}&cProfile lookup failed for &f{player}&c. Check DNS, proxy and outbound HTTP access."
-      usage: "{prefix}&eUsage: &f/slogin <help|status|reload|spawnlogin|loginready|premiumcancel|premiumcheck>"
+      usage: "{prefix}&eUsage: &f/slogin <help|status|reload|resetmessages|spawnlogin|loginready|premiumcancel|premiumcheck>"
       help-header: "&8&m----------------------------------------"
       help-commands: "&b&lSLOGIN &8• &fAdmin commands: &7/slogin status, /slogin reload"
       help-spawnlogin: "&b/slogin spawnlogin &8[set|show|delete|tp] &7Unauthenticated spawn."

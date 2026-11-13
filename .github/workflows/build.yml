@@ -19,7 +19,7 @@ jobs:
         with:
           gradle-version: '8.5'
       - name: Build and test
-        run: gradle --no-daemon clean build
+        run: gradle --no-daemon clean build integrationFixtureJar
 
       - name: Boot-test Paper 1.20.1 with online-mode=false
         shell: bash
@@ -65,18 +65,21 @@ jobs:
           motd=SLogin CI
           EOF
 
-          PLUGIN_JAR=$(find build/libs -maxdepth 1 -type f \
-            -name '*.jar' \
-            ! -name '*-dev.jar' \
-            ! -name '*-sources.jar' \
-            | head -n 1)
+          REPO_ROOT="$PWD"
+          PLUGIN_JAR="$PWD/build/libs/SLogin-1.9.0.jar"
+          CI_FIXTURE_JAR="$PWD/build/libs/SLogin-CI-Fixture.jar"
 
-          if [ -z "$PLUGIN_JAR" ]; then
-            echo "No runnable SLogin jar was produced."
+          test -f "$PLUGIN_JAR" || { echo "Missing production reobfuscated JAR"; exit 1; }
+          test -f "$CI_FIXTURE_JAR" || { echo "Missing CI-only fixture JAR"; exit 1; }
+
+          # Test-only mock classes must never be present in the distributed JAR.
+          if unzip -Z1 "$PLUGIN_JAR" | grep -q 'ci/fixture/SessionStubPlugin'; then
+            echo "SECURITY REGRESSION: test session verifier leaked into production JAR."
             exit 1
           fi
 
           cp "$PLUGIN_JAR" "$SERVER_DIR/plugins/SLogin.jar"
+          cp "$CI_FIXTURE_JAR" "$SERVER_DIR/plugins/SLogin-CI-Fixture.jar"
 
           # Seed one already-known Premium identity so this smoke test does not
           # depend on the public profile lookup service. Ownership is NOT faked:
@@ -107,6 +110,9 @@ jobs:
           EOF
           cat >> "$SERVER_DIR/plugins/SLogin/premium-preferences.yml" <<'EOF'
             premiumpending:
+              verified: false
+              pending: true
+            migtocancel:
               verified: false
               pending: true
           EOF
@@ -367,6 +373,22 @@ jobs:
               )
           PY
 
+          # Full login integration using ONLY the CI fixture session service.
+          # This sends a real RSA Encryption Response, enables AES/CFB8 and
+          # waits for Login Success + Bukkit's authenticated PlayerJoinEvent.
+          # The fixture plugin is absent from the production SLogin JAR.
+          grep -q "CI_ONLY_SESSION_STUB_INSTALLED" server.log
+          java -cp "$REPO_ROOT/build/classes/java/test" \
+            ci.fixture.PremiumProtocolClient \
+            PremiumPending 11111111-1111-4111-8111-111111111111 false
+          java -cp "$REPO_ROOT/build/classes/java/test" \
+            ci.fixture.PremiumProtocolClient \
+            CI_PremiumFresh 22222222-2222-4222-8222-222222222222 true
+
+          grep -q "CI_PREMIUM_JOIN name=PremiumPending uuid=11111111-1111-4111-8111-111111111111 authenticated=true" server.log
+          grep -q "CI_PREMIUM_JOIN name=CI_PremiumFresh uuid=22222222-2222-4222-8222-222222222222 authenticated=true" server.log
+          echo "SLogin mocked session integration: Premium migration and first-time auto-login both reached Login Success + authenticated join."
+
           # Exercise the actual Bukkit command dispatch through vanilla RCON
           # (not just plugin.yml metadata). Admin location commands must be
           # callable, including from console for read/remove operations.
@@ -410,9 +432,10 @@ jobs:
                   (104, "slogin loginready show", "loginready"),
                   (105, "slogin spawnlogin delete", "spawnlogin"),
                   (106, "slogin loginready delete", "loginready"),
-                  (107, "slogin premiumcancel PremiumPending", "PremiumPending"),
-                  (108, "slogin premiumcancel PremiumPending", "no tiene"),
+                  (107, "slogin premiumcancel MigToCancel", "cancelada"),
+                  (108, "slogin premiumcancel MigToCancel", "no tiene"),
                   (109, "slogin premiumcheck bad!", "premiumcheck"),
+                  (110, "slogin resetmessages", "estilo de mensajes"),
               ]:
                   send_rcon(sock, request_id, 2, command)
                   got_id, _, result = recv_rcon(sock)
@@ -431,7 +454,7 @@ jobs:
           fi
           echo "SLogin security smoke test: tampered Premium encryption response rejected."
 
-          grep -q "SLogin v1.8.1" server.log
+          grep -q "SLogin v1.9.0" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
 
           # Command-map smoke test: every public/admin command must have
@@ -472,6 +495,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SLogin-1.8.1
-          path: build/libs/SLogin-1.8.1.jar
+          name: SLogin-1.9.0
+          path: build/libs/SLogin-1.9.0.jar
           if-no-files-found: error

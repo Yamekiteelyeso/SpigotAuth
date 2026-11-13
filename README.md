@@ -1,10 +1,10 @@
-# SLogin 1.8 — Synex Login
+# SLogin 1.9 — Synex Login
 
 Standalone authentication plugin for Minecraft Java, **Paper 1.20.1 / Java 17**, with no plugin dependencies. Supports offline/cracked players and verified Premium Minecraft Java players on an online-mode=false server.
 
 ## Installation
 
-1. Use the CI-built SLogin-1.8.1.jar production build, not the dev JAR.
+1. Use the CI-built SLogin-1.9.0.jar production build, not the dev JAR.
 2. Remove other conflicting login plugins. Install on Paper 1.20.1 and Java 17.
 3. Restart, edit plugins/SLogin/config.yml and run /slogin status.
 4. With online-mode=false and smart-auth.enabled=true, Smart Auth should say ACTIVE.
@@ -32,6 +32,8 @@ IMPORTANT: A public nickname lookup is not proof of identity. Premium autologin 
 | /slogin loginready tp | Teleport to location |
 | /slogin spawnlogin delete | Delete location |
 | /slogin loginready delete | Delete location |
+| /slogin resetmessages | Apply redesigned ES/EN chat messages, backing up config.yml first |
+| /slogin premiumcheck player | Test public profile lookup (does not authenticate a client) |
 | /slogin premiumcancel player | Cancel a pending Premium migration (admin only; never changes verified Premium accounts) |
 | /slogin premiumcheck player | Diagnose public Minecraft profile lookup (not authentication) |
 
@@ -84,3 +86,27 @@ An empty equipment slot must not trigger an exception during pre-auth cleanup; t
 ## Premium connection troubleshooting
 
 Run `/slogin status` to ensure Smart Auth is active on Paper 1.20.1, then `/slogin premiumcheck <name>` to diagnose whether Mojang's public profile service is reachable. A positive profile lookup is NOT proof of ownership; the client's session must pass Minecraft's encrypted challenge plus `hasJoinedServer`. The connection now reports a distinct message for invalid official sessions versus Mojang/network outages. A `/slogin reload` closes only connections still in the authentication handshake, not already logged-in players.
+
+## Premium first-login improvements (1.9.0)
+
+Paper 1.20.1 may include an optional client-supplied UUID in Login Start. When
+smart-auth.challenge-if-client-online-uuid is enabled, a version-4 UUID triggers
+the official encryption challenge even if public profile lookup is unavailable.
+**A claimed UUID is never proof of ownership**: only a successful Mojang
+hasJoinedServer verification can grant passwordless access. Some offline
+launchers may send forged/random v4 UUIDs and be challenged; disable this option
+when they must use local-password login for unprotected names.
+
+The public nickname lookup now checks three official endpoints, and
+premium-negative-cache-seconds limits negative cache duration. An unavailable
+public lookup is not treated as proof of an offline account.
+
+**If you already used an older SLogin version, run /slogin resetmessages**
+to apply the refreshed Spanish/English messages. The plugin backs up your
+config.yml before replacing only the messages section.
+
+CI uses a **separate non-production** fixture plugin to emulate a successful
+sessionserver response and tests actual RSA, AES and Login Success for
+both pending /premium and a first-time Premium username. The fixture is not
+shipped in SLogin-1.9.0.jar. CI cannot replace the final verification with a
+real Microsoft/Mojang account session.
