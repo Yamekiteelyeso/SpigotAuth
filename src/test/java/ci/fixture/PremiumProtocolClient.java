@@ -2,6 +2,7 @@ package ci.fixture;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
+import javax.crypto.CipherOutputStream;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -48,7 +49,7 @@ public final class PremiumProtocolClient {
 
             ByteArrayOutputStream hello = new ByteArrayOutputStream();
             writeVarInt(hello, 0x00);
-            writeVarInt(hello, 763);
+            writeVarInt(hello, 777);
             writeString(hello, "127.0.0.1");
             hello.write((PORT >>> 8) & 0xff);
             hello.write(PORT & 0xff);
@@ -80,7 +81,7 @@ public final class PremiumProtocolClient {
             byte[] token = readSizedBytes(req);
 
             if (!serverId.isEmpty() || token.length != 4)
-                throw new IllegalStateException("Incorrect 1.20.1 encryption request.");
+                throw new IllegalStateException("Incorrect 26.3 encryption request.");
 
             PublicKey publicKey = KeyFactory.getInstance("RSA")
                     .generatePublic(new X509EncodedKeySpec(publicKeyBytes));
@@ -103,6 +104,9 @@ public final class PremiumProtocolClient {
             Cipher decrypt = Cipher.getInstance("AES/CFB8/NoPadding");
             decrypt.init(Cipher.DECRYPT_MODE, key, iv);
             InputStream encryptedInput = new CipherInputStream(rawInput, decrypt);
+            Cipher encrypt = Cipher.getInstance("AES/CFB8/NoPadding");
+            encrypt.init(Cipher.ENCRYPT_MODE, key, iv);
+            OutputStream encryptedOutput = new CipherOutputStream(rawOutput, encrypt);
 
             boolean compression = false;
             for (int received = 0; received < 12; received++) {
@@ -123,8 +127,56 @@ public final class PremiumProtocolClient {
                     if (packet.length < 20)
                         throw new IllegalStateException("Truncated Login Success");
                     System.out.println("CI_CLIENT_LOGIN_SUCCESS name=" + name + " uuid=" + identity);
-                    // A 1.20.1 player is normally placed shortly after Login
-                    // Success. Stay online for a few ticks for PlayerJoinEvent.
+                    // Minecraft 26.3 does not enter PLAY after Login Success.
+                    // It must acknowledge LOGIN and finish CONFIGURATION.
+                    sendEncrypted(encryptedOutput, new byte[]{0x03}, compression);
+
+                    ByteArrayOutputStream info = new ByteArrayOutputStream();
+                    writeVarInt(info, 0x00); // config: client_information
+                    writeString(info, "en_us");
+                    info.write(6);          // view distance
+                    writeVarInt(info, 0);    // chat mode
+                    info.write(1);          // chat colors
+                    info.write(0x7f);       // all skin parts
+                    writeVarInt(info, 1);    // right-handed
+                    info.write(0);          // text filtering
+                    info.write(1);          // server listings
+                    writeVarInt(info, 0);    // all particles
+                    sendEncrypted(encryptedOutput, info.toByteArray(), compression);
+
+                    boolean finishedConfig = false;
+                    for (int step = 0; step < 120; step++) {
+                        byte[] cfg = readPacket(encryptedInput, compression);
+                        ByteArrayInputStream configBody = new ByteArrayInputStream(cfg);
+                        int configId = readVarInt(configBody);
+                        if (configId == 0x0f) { // clientbound Known Packs
+                            ByteArrayOutputStream ack = new ByteArrayOutputStream();
+                            writeVarInt(ack, 0x07); // serverbound Known Packs
+                            writeVarInt(ack, 0);    // send all registry data
+                            sendEncrypted(encryptedOutput, ack.toByteArray(), compression);
+                        } else if (configId == 0x04) { // keep-alive
+                            ByteArrayOutputStream ack = new ByteArrayOutputStream();
+                            writeVarInt(ack, 0x04);
+                            ack.write(configBody.readNBytes(8));
+                            sendEncrypted(encryptedOutput, ack.toByteArray(), compression);
+                        } else if (configId == 0x05) { // ping
+                            ByteArrayOutputStream ack = new ByteArrayOutputStream();
+                            writeVarInt(ack, 0x05);
+                            ack.write(configBody.readNBytes(4));
+                            sendEncrypted(encryptedOutput, ack.toByteArray(), compression);
+                        } else if (configId == 0x03) { // finish configuration
+                            sendEncrypted(encryptedOutput, new byte[]{0x03}, compression);
+                            finishedConfig = true;
+                            break;
+                        } else if (configId == 0x02) { // disconnect
+                            throw new IllegalStateException(
+                                    "Disconnected during configuration: " + readString(configBody));
+                        }
+                    }
+                    if (!finishedConfig) {
+                        throw new IllegalStateException("26.3 configuration did not finish.");
+                    }
+                    System.out.println("CI_CLIENT_CONFIG_FINISHED name=" + name);
                     Thread.sleep(2500);
                     return;
                 }
@@ -133,6 +185,19 @@ public final class PremiumProtocolClient {
             }
             throw new IllegalStateException("No Login Success received.");
         }
+    }
+
+    private static void sendEncrypted(OutputStream stream, byte[] packet,
+                                      boolean compression) throws IOException {
+        if (!compression) {
+            sendPacket(stream, packet);
+            return;
+        }
+        // Small configuration response packets use compression dataLength=0.
+        ByteArrayOutputStream framed = new ByteArrayOutputStream();
+        writeVarInt(framed, 0);
+        framed.write(packet);
+        sendPacket(stream, framed.toByteArray());
     }
 
     private static byte[] readPacket(InputStream input, boolean compression) throws IOException {
