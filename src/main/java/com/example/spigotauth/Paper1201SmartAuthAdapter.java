@@ -233,6 +233,20 @@ public final class Paper1201SmartAuthAdapter {
                 return;
             }
 
+            // The optional 1.20.1 Login Start UUID is UNTRUSTED. Use it
+            // solely as a hint to request the standard Mojang session proof.
+            // This helps first-time official clients even if public nickname
+            // lookups are throttled. Forged UUIDs can never grant access.
+            UUID clientHint = hello.profileId();
+            if (plugin.getConfig().getBoolean(
+                    "smart-auth.challenge-if-client-online-uuid", true)
+                    && looksLikeOnlineUuid(clientHint)) {
+                debug("UUID online anunciado en Login Start de " + name
+                        + "; verificando propiedad con el protocolo oficial.");
+                startChallengeOrFail(hello, clientHint);
+                return;
+            }
+
             // Premium-first login: an existing local password record is NOT
             // evidence that the connecting client is offline. Challenge
             // registered names too when configured, but never merge local
@@ -549,6 +563,13 @@ public final class Paper1201SmartAuthAdapter {
             return inet.getAddress();
         }
         return null;
+    }
+
+    static boolean looksLikeOnlineUuid(UUID supplied) {
+        // Online Minecraft Java accounts normally carry version 4 UUIDs.
+        // An untrusted client can send this value; it is never sufficient
+        // for authentication without a valid Mojang hasJoined response.
+        return supplied != null && supplied.version() == 4;
     }
 
     static boolean isNetworkOrTimeoutFailure(Throwable failure) {
