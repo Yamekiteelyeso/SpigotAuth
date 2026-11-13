@@ -22,7 +22,7 @@ commands:
     usage: /premium
   slogin:
     description: SLogin management, diagnostics, and login spawn locations.
-    usage: /slogin <help|status|reload|spawnlogin|loginready|premiumcancel|premiumcheck>
+    usage: /slogin <help|status|reload|spawnlogin|loginready|premiumcancel|premiumcheck|resetmessages>
     aliases: [sloginadmin]
 permissions:
   slogin.admin:
