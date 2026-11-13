@@ -99,7 +99,7 @@ public final class AuthListener implements Listener {
         // The username alone is NOT proof of ownership.
         if (plugin.getPremiumAccounts().isProtectedName(player.getName())
                 || plugin.getPremiumPreferences().isVerified(player.getName())) {
-            player.kickPlayer(plugin.getMessages().raw("premium.verification-start-error"));
+            player.kickPlayer(plugin.getMessages().raw("premium.protected-login"));
             return;
         }
 
