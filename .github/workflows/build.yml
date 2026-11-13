@@ -106,7 +106,7 @@ jobs:
             premiumpending:
               verified: false
               pending: true
-            migrationtocancel:
+            migtocancel:
               verified: false
               pending: true
           EOF
@@ -426,8 +426,8 @@ jobs:
                   (104, "slogin loginready show", "loginready"),
                   (105, "slogin spawnlogin delete", "spawnlogin"),
                   (106, "slogin loginready delete", "loginready"),
-                  (107, "slogin premiumcancel MigrationToCancel", "cancelada"),
-                  (108, "slogin premiumcancel MigrationToCancel", "no tiene"),
+                  (107, "slogin premiumcancel MigToCancel", "cancelada"),
+                  (108, "slogin premiumcancel MigToCancel", "no tiene"),
                   (109, "slogin premiumcheck bad!", "premiumcheck"),
               ]:
                   send_rcon(sock, request_id, 2, command)
