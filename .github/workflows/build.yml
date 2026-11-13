@@ -72,6 +72,12 @@ jobs:
           test -f "$PLUGIN_JAR" || { echo "Missing production reobfuscated JAR"; exit 1; }
           test -f "$CI_FIXTURE_JAR" || { echo "Missing CI-only fixture JAR"; exit 1; }
 
+          # Test-only mock classes must never be present in the distributed JAR.
+          if unzip -Z1 "$PLUGIN_JAR" | grep -q 'ci/fixture/SessionStubPlugin'; then
+            echo "SECURITY REGRESSION: test session verifier leaked into production JAR."
+            exit 1
+          fi
+
           cp "$PLUGIN_JAR" "$SERVER_DIR/plugins/SLogin.jar"
           cp "$CI_FIXTURE_JAR" "$SERVER_DIR/plugins/SLogin-CI-Fixture.jar"
 
@@ -429,6 +435,7 @@ jobs:
                   (107, "slogin premiumcancel MigToCancel", "cancelada"),
                   (108, "slogin premiumcancel MigToCancel", "no tiene"),
                   (109, "slogin premiumcheck bad!", "premiumcheck"),
+                  (110, "slogin resetmessages", "estilo de mensajes"),
               ]:
                   send_rcon(sock, request_id, 2, command)
                   got_id, _, result = recv_rcon(sock)
