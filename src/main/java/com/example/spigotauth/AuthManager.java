@@ -6,36 +6,37 @@ import org.bukkit.scheduler.BukkitTask;
 import java.net.InetSocketAddress;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class AuthManager {
 
     private final SpigotAuth plugin;
-    private final Set<UUID> authenticated = ConcurrentHashMap.newKeySet();
+    // Bind auth to the actual connection, not just an offline-mode UUID.
+    private final Map<UUID, Player> authenticated = new ConcurrentHashMap<>();
     private record FailedAttempts(int count, long lastAttemptMillis) {}
+    private record PendingTimeout(Player owner, BukkitTask task) {}
 
     // Attempt counters are tied to account + IP and deliberately survive
     // disconnects; reconnecting must not reset password rate limiting.
     private final Map<String, FailedAttempts> failures = new ConcurrentHashMap<>();
     private final Map<String, Long> locked = new ConcurrentHashMap<>();
-    private final Map<UUID, BukkitTask> timeoutTasks = new ConcurrentHashMap<>();
+    private final Map<UUID, PendingTimeout> timeoutTasks = new ConcurrentHashMap<>();
 
     public AuthManager(SpigotAuth plugin) {
         this.plugin = plugin;
     }
 
     public boolean isAuthenticated(Player player) {
-        return authenticated.contains(player.getUniqueId());
+        return authenticated.get(player.getUniqueId()) == player;
     }
 
     public void markAuthenticated(Player player) {
         UUID id = player.getUniqueId();
-        authenticated.add(id);
+        authenticated.put(id, player);
         failures.remove(lockKey(player));
         locked.remove(lockKey(player));
-        cancelTimeout(id);
+        cancelTimeout(player);
         plugin.getPreAuthGuard().deactivate(player);
         if (plugin.getConfig().getBoolean("teleports.after-auth-to-loginready", true)) {
             plugin.getLoginLocations().teleport(player, LoginLocationStore.Spot.LOGINREADY);
@@ -44,15 +45,15 @@ public final class AuthManager {
 
     public void clear(Player player) {
         UUID id = player.getUniqueId();
-        authenticated.remove(id);
+        authenticated.remove(id, player);
         // Keep failed attempts across reconnects until the attempt window
         // expires or the user successfully authenticates.
-        cancelTimeout(id);
+        cancelTimeout(player);
         plugin.getPreAuthGuard().deactivate(player);
     }
 
     public void shutdown() {
-        timeoutTasks.values().forEach(BukkitTask::cancel);
+        timeoutTasks.values().forEach(pending -> pending.task().cancel());
         timeoutTasks.clear();
         for (Player player : plugin.getServer().getOnlinePlayers()) {
             plugin.getPreAuthGuard().deactivate(player);
@@ -144,23 +145,27 @@ public final class AuthManager {
         BukkitTask task = plugin.getServer()
                 .getScheduler()
                 .runTaskLater(plugin, () -> {
-                    timeoutTasks.remove(playerId);
-
-                    if (player.isOnline()
-                            && player.getUniqueId().equals(playerId)
-                            && !isAuthenticated(player)) {
-                        player.kickPlayer(
-                                plugin.getMessages().raw("auth.timeout-kick")
-                        );
+                    PendingTimeout pending = timeoutTasks.get(playerId);
+                    if (pending == null || pending.owner() != player
+                            || !timeoutTasks.remove(playerId, pending)) return;
+                    if (player.isOnline() && !isAuthenticated(player)) {
+                        player.kickPlayer(plugin.getMessages().raw("auth.timeout-kick"));
                     }
                 }, Math.multiplyExact(seconds, 20L));
 
-        timeoutTasks.put(playerId, task);
+        timeoutTasks.put(playerId, new PendingTimeout(player, task));
+    }
+
+    private void cancelTimeout(Player player) {
+        UUID id = player.getUniqueId();
+        PendingTimeout pending = timeoutTasks.get(id);
+        if (pending != null && pending.owner() == player
+                && timeoutTasks.remove(id, pending)) pending.task().cancel();
     }
 
     private void cancelTimeout(UUID playerId) {
-        BukkitTask task = timeoutTasks.remove(playerId);
-        if (task != null) task.cancel();
+        PendingTimeout pending = timeoutTasks.remove(playerId);
+        if (pending != null) pending.task().cancel();
     }
 
     static String lockKey(String name, String address) {

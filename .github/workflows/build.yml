@@ -66,7 +66,7 @@ jobs:
           EOF
 
           REPO_ROOT="$PWD"
-          PLUGIN_JAR="$PWD/build/libs/SLogin-1.9.1.jar"
+          PLUGIN_JAR="$PWD/build/libs/SLogin-1.9.2.jar"
           CI_FIXTURE_JAR="$PWD/build/libs/SLogin-CI-Fixture.jar"
 
           test -f "$PLUGIN_JAR" || { echo "Missing production reobfuscated JAR"; exit 1; }
@@ -454,7 +454,7 @@ jobs:
           fi
           echo "SLogin security smoke test: tampered Premium encryption response rejected."
 
-          grep -q "SLogin v1.9.1" server.log
+          grep -q "SLogin v1.9.2" server.log
           grep -q "SLogin Smart Auth validado y activo para online-mode=false" server.log
 
           # Command-map smoke test: every public/admin command must have
@@ -495,6 +495,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SLogin-1.9.1
-          path: build/libs/SLogin-1.9.1.jar
+          name: SLogin-1.9.2
+          path: build/libs/SLogin-1.9.2.jar
           if-no-files-found: error

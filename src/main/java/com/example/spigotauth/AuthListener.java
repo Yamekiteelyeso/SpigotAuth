@@ -15,11 +15,19 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
+import org.bukkit.event.player.PlayerExpChangeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerAttemptPickupItemEvent;
+import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
+import org.bukkit.event.player.PlayerBedEnterEvent;
+import org.bukkit.event.player.PlayerBucketEmptyEvent;
+import org.bukkit.event.player.PlayerBucketFillEvent;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
+import org.bukkit.event.player.PlayerToggleFlightEvent;
 import org.bukkit.event.player.PlayerCommandSendEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
@@ -36,6 +44,9 @@ import org.bukkit.projectiles.ProjectileSource;
 
 import java.util.Locale;
 import java.util.Set;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class AuthListener implements Listener {
 
@@ -46,6 +57,7 @@ public final class AuthListener implements Listener {
     );
 
     private final SpigotAuth plugin;
+    private final Map<UUID, Long> lastCommandWarning = new ConcurrentHashMap<>();
 
     public AuthListener(SpigotAuth plugin) {
         this.plugin = plugin;
@@ -93,7 +105,9 @@ public final class AuthListener implements Listener {
 
         plugin.getPreAuthGuard().activate(player);
         if (plugin.getConfig().getBoolean("teleports.on-join-to-spawnlogin", true)) {
-            plugin.getLoginLocations().teleport(player, LoginLocationStore.Spot.SPAWNLOGIN);
+            plugin.getPreAuthGuard().withAuthorizedTeleport(player,
+                    () -> plugin.getLoginLocations().teleport(
+                            player, LoginLocationStore.Spot.SPAWNLOGIN));
         }
         plugin.getAuth().startTimeout(player);
 
@@ -111,6 +125,7 @@ public final class AuthListener implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         event.setQuitMessage(null);
         plugin.getAuth().clear(event.getPlayer());
+        lastCommandWarning.remove(event.getPlayer().getUniqueId());
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -118,20 +133,20 @@ public final class AuthListener implements Listener {
         Player player = event.getPlayer();
         if (!blocked(player)) return;
 
-        Location from = event.getFrom();
-        Location to = event.getTo();
-        if (to == null) return;
+        Location fixed = confinePreAuthMovement(event.getFrom(), event.getTo());
+        if (fixed != null) event.setTo(fixed);
+    }
 
-        if (from.getX() == to.getX()
-                && from.getY() == to.getY()
-                && from.getZ() == to.getZ()) {
-            return; // Allow head rotation only.
-        }
-
+    /** Lock X/Z without freezing Y: allows gravity after airborne reconnect. */
+    static Location confinePreAuthMovement(Location from, Location to) {
+        if (to == null) return null;
+        if (from.getWorld() != to.getWorld()) return from.clone();
+        if (from.getX() == to.getX() && from.getZ() == to.getZ()) return null;
         Location fixed = from.clone();
+        fixed.setY(to.getY());
         fixed.setYaw(to.getYaw());
         fixed.setPitch(to.getPitch());
-        event.setTo(fixed);
+        return fixed;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -161,6 +176,12 @@ public final class AuthListener implements Listener {
         String command = raw.substring(1).split("\\s+", 2)[0];
         if (!isAllowedPreAuthCommand(command)) {
             event.setCancelled(true);
+            long now = System.currentTimeMillis();
+            Long previous = lastCommandWarning.get(event.getPlayer().getUniqueId());
+            if (previous == null || now - previous >= 2500L) {
+                lastCommandWarning.put(event.getPlayer().getUniqueId(), now);
+                plugin.getMessages().send(event.getPlayer(), "auth.command-blocked");
+            }
         }
     }
 
@@ -194,7 +215,8 @@ public final class AuthListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onTeleport(PlayerTeleportEvent event) {
         if (!blocked(event.getPlayer())) return;
-        if (event.getCause() != PlayerTeleportEvent.TeleportCause.PLUGIN) {
+        if (event.getCause() != PlayerTeleportEvent.TeleportCause.PLUGIN
+                || !plugin.getPreAuthGuard().isTeleportAuthorized(event.getPlayer())) {
             event.setCancelled(true);
         }
     }
@@ -228,6 +250,46 @@ public final class AuthListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onInteractEntity(PlayerInteractEntityEvent event) {
         if (blocked(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onArmorStand(PlayerArmorStandManipulateEvent event) {
+        if (blocked(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInteractAtEntity(PlayerInteractAtEntityEvent event) {
+        if (blocked(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onBucketFill(PlayerBucketFillEvent event) {
+        if (blocked(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onBucketEmpty(PlayerBucketEmptyEvent event) {
+        if (blocked(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onBed(PlayerBedEnterEvent event) {
+        if (blocked(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onAttemptPickup(PlayerAttemptPickupItemEvent event) {
+        if (blocked(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onExperience(PlayerExpChangeEvent event) {
+        if (blocked(event.getPlayer())) event.setAmount(0);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onToggleFlight(PlayerToggleFlightEvent event) {
+        if (blocked(event.getPlayer()) && event.isFlying()) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
