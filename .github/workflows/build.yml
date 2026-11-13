@@ -563,9 +563,9 @@ jobs:
                   sock.sendall(varint(len(handshake)) + handshake)
                   hello = varint(0) + mc_string(name)
                   if hint is None:
-                      hello += b"\\x00"
+                      hello += bytes([0])
                   else:
-                      hello += b"\\x01" + hint.bytes
+                      hello += bytes([1]) + hint.bytes
                   sock.sendall(varint(len(hello)) + hello)
                   size = recv_varint(sock)
                   data = bytearray()
