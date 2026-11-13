@@ -5,7 +5,7 @@ import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.util.Vector;
+import java.util.function.BooleanSupplier;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -20,28 +20,32 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class PreAuthGuard {
 
     private final SpigotAuth plugin;
-    private final Map<UUID, Snapshot> snapshots = new ConcurrentHashMap<>();
+    private final Map<UUID, GuardState> snapshots = new ConcurrentHashMap<>();
+    private final java.util.Set<UUID> approvedTeleports = ConcurrentHashMap.newKeySet();
 
     public PreAuthGuard(SpigotAuth plugin) {
         this.plugin = plugin;
     }
 
     public boolean isActive(Player player) {
-        return snapshots.containsKey(player.getUniqueId());
+        GuardState state = snapshots.get(player.getUniqueId());
+        return state != null && state.owner() == player;
     }
 
     public void activate(Player player) {
-        snapshots.computeIfAbsent(player.getUniqueId(), id -> new Snapshot(
-                player.getGameMode(),
-                player.isInvisible(),
-                player.isInvulnerable(),
-                player.isCollidable(),
-                player.getCanPickupItems(),
-                player.getAllowFlight(),
-                player.isFlying(),
-                player.isGlowing(),
-                player.isSilent()
-        ));
+        snapshots.compute(player.getUniqueId(), (id, state) ->
+                state != null && state.owner() == player ? state : new GuardState(
+                        player, new Snapshot(
+                                player.getGameMode(),
+                                player.isInvisible(),
+                                player.isInvulnerable(),
+                                player.isCollidable(),
+                                player.getCanPickupItems(),
+                                player.getAllowFlight(),
+                                player.isFlying(),
+                                player.isGlowing(),
+                                player.isSilent()
+                        )));
 
         player.setGameMode(GameMode.SURVIVAL);
         player.setInvisible(true);
@@ -53,15 +57,17 @@ public final class PreAuthGuard {
         if (player.isInsideVehicle()) player.leaveVehicle();
         if (player.isFlying()) player.setFlying(false);
         player.setAllowFlight(false);
-        player.setVelocity(new Vector(0, 0, 0));
+        // Do not zero vertical motion: airborne reconnects must fall naturally.
         player.setFallDistance(0.0F);
 
         maskEquipment(player);
     }
 
     public void deactivate(Player player) {
-        Snapshot snapshot = snapshots.remove(player.getUniqueId());
-        if (snapshot == null) return;
+        GuardState state = snapshots.get(player.getUniqueId());
+        if (state == null || state.owner() != player
+                || !snapshots.remove(player.getUniqueId(), state)) return;
+        Snapshot snapshot = state.snapshot();
 
         player.setInvisible(snapshot.invisible());
         player.setInvulnerable(snapshot.invulnerable());
@@ -77,7 +83,26 @@ public final class PreAuthGuard {
     }
 
     public void forget(Player player) {
-        snapshots.remove(player.getUniqueId());
+        GuardState state = snapshots.get(player.getUniqueId());
+        if (state != null && state.owner() == player) {
+            snapshots.remove(player.getUniqueId(), state);
+        }
+    }
+
+    /** Authorizes only SLogin's synchronous internal relocation. */
+    public boolean withAuthorizedTeleport(Player player, BooleanSupplier operation) {
+        if (!isActive(player)) return operation.getAsBoolean();
+        UUID id = player.getUniqueId();
+        boolean added = approvedTeleports.add(id);
+        try {
+            return operation.getAsBoolean();
+        } finally {
+            if (added) approvedTeleports.remove(id);
+        }
+    }
+
+    public boolean isTeleportAuthorized(Player player) {
+        return isActive(player) && approvedTeleports.contains(player.getUniqueId());
     }
 
     public void refreshViewer(Player viewer) {
@@ -133,6 +158,8 @@ public final class PreAuthGuard {
         }
         viewer.sendEquipmentChange(target, hidden);
     }
+
+    private record GuardState(Player owner, Snapshot snapshot) {}
 
     private record Snapshot(
             GameMode gameMode,

@@ -1,10 +1,10 @@
-# SLogin 1.9.1 — Synex Login
+# SLogin 1.9.2 — Synex Login
 
 Standalone authentication plugin for Minecraft Java, **Paper 1.20.1 / Java 17**, with no plugin dependencies. Supports offline/cracked players and verified Premium Minecraft Java players on an online-mode=false server.
 
 ## Installation
 
-1. Use the CI-built SLogin-1.9.1.jar production build, not the dev JAR.
+1. Use the CI-built SLogin-1.9.2.jar production build, not the dev JAR.
 2. Remove other conflicting login plugins. Install on Paper 1.20.1 and Java 17.
 3. Restart, edit plugins/SLogin/config.yml and run /slogin status.
 4. With online-mode=false and smart-auth.enabled=true, run `/slogin status`. Only Paper 1.20.1 can show ACTIVE; if inactive, the diagnostic line explains why.
@@ -110,5 +110,18 @@ config.yml before replacing only the messages section.
 CI uses a **separate non-production** fixture plugin to emulate a successful
 sessionserver response and tests actual RSA, AES and Login Success for
 both pending /premium and a first-time Premium username. The fixture is not
-shipped in SLogin-1.9.1.jar. CI cannot replace the final verification with a
+shipped in SLogin-1.9.2.jar. CI cannot replace the final verification with a
 real Microsoft/Mojang account session.
+
+## 1.9.2: reconnect safety and pre-login isolation
+
+Unauthenticated players are confined horizontally while gravity and vertical
+movement remain free so an airborne reconnect doesn't get stuck and kicked for
+flying. Only SLogin's own /spawnlogin teleport is allowed before authentication.
+Other plugin teleports and additional interactions are blocked. Authenticated
+state and pending login timers are bound to the actual Player connection, not
+just its UUID, preventing a new connection from inheriting a previous login.
+
+Test in-game: register/login, jump and disconnect while airborne, reconnect,
+fall to the ground, and log in normally. The production Premium verification
+path was not modified; also retest /premium on your Paper 1.20.1 server.
