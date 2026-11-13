@@ -1,10 +1,10 @@
-# SLogin 1.8 — Synex Login
+# SLogin 1.9 — Synex Login
 
 Standalone authentication plugin for Minecraft Java, **Paper 1.20.1 / Java 17**, with no plugin dependencies. Supports offline/cracked players and verified Premium Minecraft Java players on an online-mode=false server.
 
 ## Installation
 
-1. Use the CI-built SLogin-1.8.1.jar production build, not the dev JAR.
+1. Use the CI-built SLogin-1.9.0.jar production build, not the dev JAR.
 2. Remove other conflicting login plugins. Install on Paper 1.20.1 and Java 17.
 3. Restart, edit plugins/SLogin/config.yml and run /slogin status.
 4. With online-mode=false and smart-auth.enabled=true, Smart Auth should say ACTIVE.
