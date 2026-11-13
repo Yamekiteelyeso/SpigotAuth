@@ -574,18 +574,21 @@ jobs:
                       if not chunk:
                           raise RuntimeError("Truncated Login response")
                       data += chunk
-                  return data[0]
+                  return data[0], bytes(data)
 
-          first = first_response(
+          no_hint_id, no_hint_packet = first_response("CI_ManualNoUUID")
+          print(f"Manual local no-hint first packet: {no_hint_id:#x}, {no_hint_packet!r}")
+          first, packet = first_response(
               "CI_ManualNew",
               uuid.UUID("33333333-3333-4333-8333-333333333333")
           )
-          if first not in (0x02, 0x03):
+          print(f"Manual local online-hint first packet: {first:#x}, {packet!r}")
+          if no_hint_id not in (0x02, 0x03) or first not in (0x02, 0x03):
               raise SystemExit(
-                  f"Manual mode new account expected offline login, got {first:#x}"
+                  f"Manual mode new account expected offline login, noHint={no_hint_id:#x}, onlineHint={first:#x}"
               )
           for name in ("Notch", "ManualPending"):
-              first = first_response(name)
+              first, _ = first_response(name)
               if first != 0x01:
                   raise SystemExit(
                       f"Manual mode must protect {name} with a challenge, "
