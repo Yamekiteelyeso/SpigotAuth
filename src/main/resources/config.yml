@@ -23,6 +23,9 @@ teleports:
 
 # Cache del lookup de perfiles Java.
 premium-cache-minutes: 10
+# Los nombres no encontrados se guardan durante menos tiempo para evitar
+# que un 404 temporal impida el primer ingreso de una cuenta original.
+premium-negative-cache-seconds: 45
 
 smart-auth:
   enabled: true
@@ -35,6 +38,12 @@ smart-auth:
   # Si está activo, un nick que exista como Premium puede recibir el challenge
   # oficial incluso en su primer acceso, similar a nLogin Premium.
   challenge-if-premium-nickname: true
+
+  # En 1.20.1, el cliente puede anunciar su UUID en Login Start.
+  # Un UUID v4 solo sirve para decidir si pedir la prueba de sesión Premium.
+  # NO autoriza por sí solo: SLogin siempre exige cifrado + hasJoinedServer.
+  # Puedes desactivarlo si tu launcher offline envía UUIDs v4 inventados.
+  challenge-if-client-online-uuid: true
 
   # También intenta verificar por Mojang los nombres que ya aparecen en
   # accounts.yml. Si la sesión Premium se verifica, entra sin /login.
