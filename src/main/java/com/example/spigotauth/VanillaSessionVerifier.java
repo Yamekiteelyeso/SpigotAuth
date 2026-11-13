@@ -88,12 +88,22 @@ final class VanillaSessionVerifier implements AutoCloseable {
                 }
 
                 if (result == null) return null;
-                if (!(result instanceof GameProfile profile)) {
-                    throw new IllegalStateException(
-                            "Authlib devolvió un tipo de perfil inesperado.");
+                if (result instanceof GameProfile profile) return profile;
+                // Authlib 10 no longer returns GameProfile from hasJoined:
+                // it returns a ProfileResult record wrapping the official
+                // GameProfile and its property metadata. Do not trust a name
+                // or UUID supplied by the client as a replacement.
+                if (result.getClass().getName().equals(
+                        "com.mojang.authlib.services.ProfileResult")) {
+                    Method profileMethod = result.getClass().getMethod("profile");
+                    Object verified = profileMethod.invoke(result);
+                    if (verified instanceof GameProfile profile) {
+                        return profile;
+                    }
                 }
-
-                return profile;
+                throw new IllegalStateException(
+                        "Authlib devolvió un resultado de sesión inesperado: "
+                                + result.getClass().getName());
             } catch (InvocationTargetException exception) {
                 Throwable cause = exception.getCause() == null
                         ? exception
@@ -115,8 +125,9 @@ final class VanillaSessionVerifier implements AutoCloseable {
 
         for (Method method : sessionServiceClass.getMethods()) {
             if (!method.getName().equals("hasJoinedServer")) continue;
-            if (!GameProfile.class.isAssignableFrom(
-                    method.getReturnType())) continue;
+            if (!GameProfile.class.isAssignableFrom(method.getReturnType())
+                    && !method.getReturnType().getName().equals(
+                    "com.mojang.authlib.services.ProfileResult")) continue;
 
             Class<?>[] parameters = method.getParameterTypes();
 
